@@ -7,6 +7,7 @@ static struct whisper_context *g_ctx = NULL;
 
 int rubai_load(const char *model_path) {
     if (g_ctx) return 0;
+    if (!model_path || !model_path[0]) return 1;
     struct whisper_context_params cp = whisper_context_default_params();
     cp.use_gpu = true;            // Metal (Apple GPU)
     cp.flash_attn = true;
@@ -36,7 +37,10 @@ char *rubai_transcribe(const float *samples, int n_samples, int n_threads) {
     p.print_special     = false;
     p.print_timestamps  = false;
     p.suppress_blank    = true;
+    p.no_speech_thold   = 0.25f;   // past ovozlarni ham ushlash
+    p.logprob_thold     = -1.0f;
 
+    if (n_samples <= 0) return NULL;
     if (whisper_full(g_ctx, p, samples, n_samples) != 0) return NULL;
 
     int ns = whisper_full_n_segments(g_ctx);

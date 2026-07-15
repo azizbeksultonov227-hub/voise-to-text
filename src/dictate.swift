@@ -7,6 +7,31 @@ import ServiceManagement
 
 // MARK: - Whisper (rubaiSTT) yadrosi
 
+enum RubaiLog {
+    private static let df = ISO8601DateFormatter()
+    static func write(_ msg: String) {
+        NSLog("[rubai] \(msg)")
+        let line = "\(df.string(from: Date())) \(msg)\n"
+        let path = NSHomeDirectory() + "/rubai-stt/dictation.log"
+        try? FileManager.default.createDirectory(atPath: NSHomeDirectory() + "/rubai-stt",
+                                                 withIntermediateDirectories: true)
+        if let h = FileHandle(forWritingAtPath: path) {
+            h.seekToEndOfFile(); h.write(line.data(using: .utf8)!); try? h.close()
+        } else {
+            FileManager.default.createFile(atPath: path, contents: line.data(using: .utf8))
+        }
+    }
+}
+
+private func prepareSamples(_ raw: [Float]) -> [Float] {
+    guard !raw.isEmpty else { return raw }
+    var peak: Float = 0
+    for s in raw { peak = max(peak, abs(s)) }
+    guard peak > 0.0001 else { return raw }
+    let gain = min(0.95 / peak, 40)   // juda past mikrofon signali uchun
+    return raw.map { $0 * gain }
+}
+
 final class Whisper {
     static let shared = Whisper()
     private var loaded = false
@@ -46,7 +71,7 @@ final class Whisper {
     }
 
     func unload() { q.async { if self.loaded { rubai_unload(); self.loaded = false } } }
-    var isLoaded: Bool { loaded }
+    var isLoaded: Bool { q.sync { loaded } }
 }
 
 // MARK: - Mikrofon (16kHz mono float32)
@@ -177,14 +202,16 @@ final class Overlay {
 // MARK: - Matnni faol input'ga kiritish (clipboard + ⌘V)
 
 enum Inserter {
-    static func insert(_ text: String) {
-        NSLog("[rubai] insert: len=\(text.count) AXTrusted=\(AXIsProcessTrusted())")
-        guard !text.isEmpty else { NSLog("[rubai] insert: matn bo'sh, to'xtatildi"); return }
+    /// Matnni clipboard'ga qo'yadi va ⌘V yuboradi. Accessibility yo'q bo'lsa false.
+    @discardableResult
+    static func insert(_ text: String) -> Bool {
+        RubaiLog.write("insert: len=\(text.count) AXTrusted=\(AXIsProcessTrusted())")
+        guard !text.isEmpty else { RubaiLog.write("insert: matn bo'sh"); return false }
+        guard AXIsProcessTrusted() else { RubaiLog.write("insert: Accessibility yo'q"); return false }
         let pb = NSPasteboard.general
         let old = pb.string(forType: .string)
         pb.clearContents()
         pb.setString(text, forType: .string)
-        // ⌘V yuborish (Accessibility ruxsati kerak)
         let src = CGEventSource(stateID: .combinedSessionState)
         let vKey: CGKeyCode = 9 // 'v'
         let down = CGEvent(keyboardEventSource: src, virtualKey: vKey, keyDown: true)
@@ -193,13 +220,13 @@ enum Inserter {
         up?.flags = .maskCommand
         down?.post(tap: .cgAnnotatedSessionEventTap)
         up?.post(tap: .cgAnnotatedSessionEventTap)
-        NSLog("[rubai] ⌘V yuborildi (down=\(down != nil) up=\(up != nil))")
-        // eski clipboard'ni qaytarish
+        RubaiLog.write("⌘V yuborildi (down=\(down != nil) up=\(up != nil))")
         if let old = old {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                 pb.clearContents(); pb.setString(old, forType: .string)
             }
         }
+        return true
     }
 }
 
@@ -645,25 +672,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
     }
 
+    private func finishTranscription(_ text: String, samples: [Float]) {
+        let secs = Double(samples.count) / 16000.0
+        RubaiLog.write("natija: '\(text)' len=\(text.count) audio=\(String(format: "%.1f", secs))s")
+
+        if text.isEmpty {
+            let msg = samples.count < 8000
+                ? "Juda qisqa — kamida 1 soniya gapiring"
+                : "Ovoz aniqlanmadi — balandroq gapiring"
+            overlay.show("⚠️ \(msg)", recording: false)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) { self.overlay.hide() }
+            scheduleIdleUnload()
+            return
+        }
+
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+
+        if Inserter.insert(text) {
+            overlay.hide()
+        } else {
+            let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+            _ = AXIsProcessTrustedWithOptions(opts)
+            overlay.show("Matn clipboard'da — ⌘V bosing (Accessibility kerak)", recording: false)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) { self.overlay.hide() }
+        }
+        scheduleIdleUnload()
+    }
+
     @objc private func toggle() {
-        NSLog("[rubai] toggle fired, isRecording=\(rec.isRecording)")
+        RubaiLog.write("toggle fired, isRecording=\(rec.isRecording)")
         if rec.isRecording {
             let samples = rec.stop()
-            NSLog("[rubai] stopped, samples=\(samples.count) (\(Double(samples.count)/16000.0)s)")
+            let secs = Double(samples.count) / 16000.0
+            RubaiLog.write("stopped, samples=\(samples.count) (\(String(format: "%.1f", secs))s)")
             overlay.show("Matnga o'girilmoqda…", recording: false)
-            Whisper.shared.transcribe(samples) { [weak self] text in
-                NSLog("[rubai] transcription natija: '\(text)' (uzunlik=\(text.count))")
-                self?.overlay.hide()
-                Inserter.insert(text)
-                self?.scheduleIdleUnload()
+            let prepared = prepareSamples(samples)
+            Whisper.shared.transcribe(prepared) { [weak self] text in
+                self?.finishTranscription(text, samples: samples)
             } fail: { [weak self] msg in
-                NSLog("[rubai] transcription XATO: \(msg)")
+                RubaiLog.write("transcription XATO: \(msg)")
                 self?.overlay.show("⚠️ \(msg)", recording: false)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) { self?.overlay.hide() }
             }
         } else {
             rec.start { [weak self] ok in
-                NSLog("[rubai] record start ok=\(ok)")
+                RubaiLog.write("record start ok=\(ok)")
                 self?.overlay.show(ok ? "Yozilmoqda… (yana \(self?.hkConfig.displayString ?? "⌃⌥D"))" : "Mikrofonga ruxsat yo'q",
                                    recording: ok)
                 if !ok { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { self?.overlay.hide() } }
