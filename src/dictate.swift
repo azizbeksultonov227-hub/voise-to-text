@@ -142,61 +142,207 @@ final class Recorder {
 
 final class Overlay {
     private var panel: NSPanel?
-    private let icon = NSTextField(labelWithString: "")
-    private let label = NSTextField(labelWithString: "")
-    private let W: CGFloat = 300
+    private let W: CGFloat = 320
     private let H: CGFloat = 56
+    private let PH: CGFloat = 110
 
     func show(_ text: String, recording: Bool) {
+        let v = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: W, height: H))
+        v.material = .hudWindow; v.blendingMode = .behindWindow; v.state = .active
+        v.wantsLayer = true; v.layer?.cornerRadius = 14; v.layer?.masksToBounds = true
+        let ic = labelField(frame: NSRect(x: 16, y: (H - 26) / 2, width: 26, height: 26),
+                            fontSize: 20, alignment: .center)
+        ic.stringValue = recording ? "🔴" : "✍️"
+        let lb = labelField(frame: NSRect(x: 50, y: (H - 18) / 2, width: W - 66, height: 18),
+                            fontSize: 14)
+        lb.stringValue = text
+        v.addSubview(ic); v.addSubview(lb)
+        showPanel(v, height: H)
+    }
+
+    func showProgress(fileName: String, progress: Double, status: String) {
+        let v = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: W, height: PH))
+        v.material = .hudWindow; v.blendingMode = .behindWindow; v.state = .active
+        v.wantsLayer = true; v.layer?.cornerRadius = 14; v.layer?.masksToBounds = true
+        let ic = labelField(frame: NSRect(x: 14, y: PH - 36, width: 22, height: 22), fontSize: 16)
+        ic.stringValue = "📁"
+        let fn = labelField(frame: NSRect(x: 42, y: PH - 38, width: W - 56, height: 18), fontSize: 13)
+        fn.stringValue = fileName
+        fn.lineBreakMode = .byTruncatingMiddle
+        fn.textColor = .labelColor
+        let pb = NSProgressIndicator(frame: NSRect(x: 18, y: PH - 72, width: W - 36, height: 12))
+        pb.isIndeterminate = false
+        pb.minValue = 0; pb.maxValue = 1; pb.doubleValue = progress
+        pb.controlSize = .small; pb.isBezeled = false
+        let st = labelField(frame: NSRect(x: 18, y: PH - 92, width: W - 36, height: 14), fontSize: 11)
+        st.stringValue = status
+        st.textColor = .secondaryLabelColor
+        v.addSubview(ic); v.addSubview(fn); v.addSubview(pb); v.addSubview(st)
+        showPanel(v, height: PH)
+    }
+
+    func showResult(_ text: String) {
+        let maxW: CGFloat = 500
+        let w = min(maxW, text.isEmpty ? W : max(W, min(CGFloat(text.count) * 8, maxW)))
+        let lineH: CGFloat = 18
+        let textH = max(H, lineH * min(CGFloat(ceil(Double(text.count) / 40)), 4) + 24)
+        let v = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: w, height: textH))
+        v.material = .hudWindow; v.blendingMode = .behindWindow; v.state = .active
+        v.wantsLayer = true; v.layer?.cornerRadius = 14; v.layer?.masksToBounds = true
+        let ic = labelField(frame: NSRect(x: 14, y: textH - 32, width: 22, height: 22), fontSize: 16)
+        ic.stringValue = "✅"
+        let lb = labelField(frame: NSRect(x: 42, y: 12, width: w - 56, height: textH - 24),
+                            fontSize: 13)
+        lb.stringValue = text
+        lb.lineBreakMode = .byWordWrapping
+        lb.textColor = .labelColor
+        v.addSubview(ic); v.addSubview(lb)
+        showPanel(v, height: textH)
+    }
+
+    func hide() { panel?.orderOut(nil) }
+
+    private func showPanel(_ content: NSView, height: CGFloat) {
         if panel == nil {
-            let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: W, height: H),
+            let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: W, height: height),
                             styleMask: [.nonactivatingPanel, .borderless],
                             backing: .buffered, defer: false)
-            p.level = .floating
-            p.isFloatingPanel = true
-            p.hidesOnDeactivate = false
-            p.backgroundColor = .clear
-            p.isOpaque = false
-            p.hasShadow = true
-
-            // HUD orqa fon (blur)
-            let bg = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: W, height: H))
-            bg.material = .hudWindow
-            bg.blendingMode = .behindWindow
-            bg.state = .active
-            bg.wantsLayer = true
-            bg.layer?.cornerRadius = 14
-            bg.layer?.masksToBounds = true
-
-            // ikona — vertikal markazda
-            icon.font = .systemFont(ofSize: 20)
-            icon.isBezeled = false; icon.isEditable = false; icon.drawsBackground = false
-            icon.alignment = .center
-            icon.frame = NSRect(x: 16, y: (H - 26) / 2, width: 26, height: 26)
-
-            // matn — vertikal markazda
-            label.font = .systemFont(ofSize: 14, weight: .semibold)
-            label.textColor = .labelColor
-            label.isBezeled = false; label.isEditable = false; label.drawsBackground = false
-            label.alignment = .left
-            label.lineBreakMode = .byTruncatingTail
-            label.frame = NSRect(x: 50, y: (H - 18) / 2, width: W - 66, height: 18)
-
-            bg.addSubview(icon)
-            bg.addSubview(label)
-            p.contentView = bg
+            p.level = .floating; p.isFloatingPanel = true; p.hidesOnDeactivate = false
+            p.backgroundColor = .clear; p.isOpaque = false; p.hasShadow = true
             panel = p
         }
-        icon.stringValue = recording ? "🔴" : "✍️"
-        label.stringValue = text
+        panel!.contentView = content
+        panel!.setContentSize(content.frame.size)
         if let scr = NSScreen.main {
             let f = scr.visibleFrame
-            panel!.setFrameOrigin(NSPoint(x: f.midX - W / 2, y: f.minY + 140))
+            panel!.setFrameOrigin(NSPoint(x: f.midX - content.frame.width / 2, y: f.minY + 140))
         }
         panel!.orderFrontRegardless()
     }
 
-    func hide() { panel?.orderOut(nil) }
+    private func labelField(frame: NSRect, fontSize: CGFloat, alignment: NSTextAlignment = .left) -> NSTextField {
+        let f = NSTextField(labelWithString: "")
+        f.font = .systemFont(ofSize: fontSize, weight: .semibold)
+        f.isBezeled = false; f.isEditable = false; f.drawsBackground = false
+        f.alignment = alignment; f.textColor = .secondaryLabelColor
+        f.frame = frame
+        return f
+    }
+}
+
+// MARK: - Fayl transkripsiyasi (audio/video → matn)
+
+final class FileTranscriber {
+    private let overlay = Overlay()
+    private var isRunning = false
+
+    func selectAndTranscribe() {
+        guard !isRunning else { return }
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.audio, .movie, .mpeg4Audio, .wav, .mp3]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.message = "Transkripsiya uchun audio yoki video faylni tanlang"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        transcribeFile(url)
+    }
+
+    func transcribeFile(_ url: URL) {
+        guard !isRunning else { return }
+        isRunning = true
+        let name = url.lastPathComponent
+        overlay.showProgress(fileName: name, progress: 0, status: "Tayyorlanmoqda…")
+        let q = DispatchQueue.global(qos: .userInitiated)
+        q.async { [weak self] in self?.extractAndTranscribe(url) }
+    }
+
+    private func extractAndTranscribe(_ url: URL) {
+        let name = url.lastPathComponent
+        let asst = AVAsset(url: url)
+        guard let track = asst.tracks(withMediaType: .audio).first else {
+            fail("\(name): audio track topilmadi"); return
+        }
+        let dur = CMTimeGetSeconds(asst.duration)
+        guard dur > 0 else { fail("\(name): fayl bo'sh"); return }
+        guard dur < 7200 else { fail("\(name): 2 soatdan katta fayl qo'llab-quvvatlanmaydi"); return }
+
+        let outS: [String: Any] = [
+            AVFormatIDKey: kAudioFormatLinearPCM, AVLinearPCMBitDepthKey: 32,
+            AVLinearPCMIsFloatKey: true, AVNumberOfChannelsKey: 1,
+            AVSampleRateKey: 16000, AVLinearPCMIsNonInterleaved: false
+        ]
+        guard let rdr = try? AVAssetReader(asset: asst) else {
+            fail("\(name): fayl ochilmadi"); return
+        }
+        let outp = AVAssetReaderTrackOutput(track: track, outputSettings: outS)
+        guard rdr.canAdd(outp) else { fail("\(name): audio o'qilmadi"); return }
+        rdr.add(outp)
+
+        progress(name, p: 0, s: "Audio ajratilmoqda…")
+        rdr.startReading()
+        var samps = [Float]()
+        var lastP: Double = 0
+        while rdr.status == .reading {
+            guard let buf = outp.copyNextSampleBuffer() else { break }
+            defer { CMSampleBufferInvalidate(buf) }
+            guard let bb = CMSampleBufferGetDataBuffer(buf) else { continue }
+            var len: Int = 0; var ptr: UnsafeMutablePointer<Int8>?
+            CMBlockBufferGetDataPointer(bb, atOffset: 0, lengthAtOffsetOut: nil, totalLengthOut: &len, dataPointerOut: &ptr)
+            if let p2 = ptr {
+                let cnt = len / MemoryLayout<Float>.size
+                let fp = p2.withMemoryRebound(to: Float.self, capacity: cnt) { $0 }
+                samps.append(contentsOf: UnsafeBufferPointer(start: fp, count: cnt))
+            }
+            let pts = CMTimeGetSeconds(buf.presentationTimeStamp)
+            if dur > 0 { let p = min(pts / dur, 1.0); if p - lastP > 0.05 { lastP = p; progress(name, p: p, s: "Audio ajratilmoqda…") } }
+        }
+        guard rdr.status == .completed else { fail("\(name): o'qish xatosi"); return }
+        RubaiLog.write("fayl \(name): \(samps.count) samples (\(String(format: "%.1f", Double(samps.count)/16000))s)")
+
+        progress(name, p: 1, s: "Transkripsiya qilinmoqda…")
+        let prepared = prepareSamples(samps)
+        let sem = DispatchSemaphore(value: 0)
+        var text = ""; var err = ""
+        Whisper.shared.transcribe(prepared, done: { text = $0; sem.signal() }, fail: { err = $0; sem.signal() })
+        sem.wait()
+
+        DispatchQueue.main.async {
+            self.isRunning = false
+            if !err.isEmpty { self.fail("\(name): \(err)"); return }
+            if text.isEmpty { self.fail("\(name): matn aniqlanmadi"); return }
+
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+
+            let short = text.count > 200 ? String(text.prefix(200)) + "…" : text
+            self.overlay.showResult("\(name): \"\(short)\"")
+
+            let saveName = (name as NSString).deletingPathExtension + "_rubai.txt"
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) { self.overlay.hide() }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.offerSave(text, name: saveName) }
+        }
+    }
+
+    private func progress(_ name: String, p: Double, s: String) {
+        DispatchQueue.main.async { self.overlay.showProgress(fileName: name, progress: p, status: s) }
+    }
+
+    private func fail(_ msg: String) {
+        DispatchQueue.main.async {
+            self.isRunning = false
+            self.overlay.show("⚠️ \(msg)", recording: false)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) { self.overlay.hide() }
+        }
+    }
+
+    private func offerSave(_ text: String, name: String) {
+        let p = NSSavePanel()
+        p.title = "Transkripsiyani saqlash"
+        p.nameFieldStringValue = name
+        p.message = "Matn clipboard'ga ko'chirildi. Faylga saqlaysizmi?"
+        guard p.runModal() == .OK, let url = p.url else { return }
+        try? text.write(to: url, atomically: true, encoding: .utf8)
+    }
 }
 
 // MARK: - Matnni faol input'ga kiritish (clipboard + ⌘V)
@@ -596,6 +742,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private let rec = Recorder()
     private let overlay = Overlay()
+    private let fileXcriber = FileTranscriber()
     private let hotkey = HotKey()
     private var idleTimer: Timer?
     private var hkConfig = HotKeyStore.load()
@@ -620,6 +767,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         dictateItem = NSMenuItem(title: "Diktovka  (\(hkConfig.displayString))", action: #selector(toggle), keyEquivalent: "")
         menu.addItem(dictateItem)
+        menu.addItem(NSMenuItem(title: "Fayl transkripsiyasi…", action: #selector(openFileTranscribe), keyEquivalent: "o"))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Sozlamalar…", action: #selector(openSettings), keyEquivalent: ","))
         loginItem = NSMenuItem(title: "Login'da ishga tushirish", action: #selector(toggleLogin), keyEquivalent: "")
@@ -667,6 +815,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openSettings() { settings.show() }
+
+    @objc private func openFileTranscribe() { fileXcriber.selectAndTranscribe() }
+
+    func application(_ sender: NSApplication, openFile filename: String) -> Bool {
+        fileXcriber.transcribeFile(URL(fileURLWithPath: filename))
+        return true
+    }
 
     @objc private func openAX() {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)

@@ -81,6 +81,18 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <key>NSHighResolutionCapable</key><true/>
     <key>NSPrincipalClass</key><string>NSApplication</string>
     <key>NSMicrophoneUsageDescription</key><string>Ovozingizni matnga o'girish uchun mikrofon kerak.</string>
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key><string>Audio va video fayllar</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>public.audio</string>
+                <string>public.movie</string>
+            </array>
+            <key>LSHandlerRank</key><string>Alternate</string>
+        </dict>
+    </array>
 </dict>
 </plist>
 PLIST
