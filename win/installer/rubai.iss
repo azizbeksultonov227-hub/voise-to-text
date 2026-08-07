@@ -31,7 +31,11 @@ DefaultDirName={autopf}\RubaiSTT
 DefaultGroupName={#AppName}
 UninstallDisplayIcon={app}\{#AppExe}
 OutputDir=..\..\dist
+#ifdef BundleModel
+OutputBaseFilename=RubaiSTT-Diktovka-{#AppVersion}-oflayn-setup
+#else
 OutputBaseFilename=RubaiSTT-Diktovka-{#AppVersion}-setup
+#endif
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
@@ -55,7 +59,7 @@ uz.CreateDesktopIcon=Ish stolida yorliq yaratilsin
 uz.AutoStart=Kompyuter yonganda avtomatik ishga tushsin
 uz.LaunchApp={#AppName} ni ishga tushirish
 uz.DownloadingModel=Til modeli yuklab olinmoqda (785 MB)...
-uz.ModelFailed=Model yuklab olinmadi.%n%nInternetga ulanishni tekshirib, o'rnatishni qaytadan boshlang.%n%nXato: %1
+uz.ModelFailed=Til modelini yuklab olib bo'lmadi (3 marta urinildi).%n%nBu odatda internet ulanishi uzilganini bildiradi — 785 MB fayl uchun barqaror ulanish kerak.%n%nQO'LDA YUKLAB OLISH (tavsiya etiladi):%n%n1. Quyidagi havolani brauzerda oching yoki yuklab olish menejeriga bering:%n   {#ModelUrl}%n%n2. Yuklangan «ggml-rubaistt.bin» faylini shu o'rnatuvchi (setup.exe) turgan papkaga qo'ying%n%n3. O'rnatuvchini qaytadan ishga tushiring — u faylni o'zi topadi va internetsiz o'rnatadi%n%nTexnik xato: %1
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "Qo'shimcha:"
@@ -104,6 +108,16 @@ Source: "{#SourceDir}\vcomp140.dll";       DestDir: "{app}"; Flags: ignoreversio
 
 Source: "..\..\LICENSE";                   DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 
+; OFLAYN VARIANT
+;
+; iscc /DBundleModel=<model faylining yo'li> ... bilan yig'ilsa, model
+; o'rnatuvchi ichiga joylanadi va internet umuman kerak bo'lmaydi.
+; Natija ~800 MB, lekin ishonchsiz ulanishda yagona ishlaydigan yo'l.
+#ifdef BundleModel
+Source: "{#BundleModel}"; DestDir: "{app}\models"; \
+    DestName: "ggml-rubaistt.bin"; Flags: ignoreversion
+#endif
+
 [Dirs]
 Name: "{app}\models"
 
@@ -126,9 +140,25 @@ Type: files;      Name: "{app}\models\ggml-rubaistt.bin"
 Type: dirifempty; Name: "{app}\models"
 
 [Code]
+//
+// MODEL QAYERDAN OLINADI
+//
+// Model 785 MB. GitHub'dan yuklab olish O'zbekistonda ishonchsiz — provayder,
+// proksi yoki antivirus TLS ulanishini uzib qo'yishi mumkin (WinHTTP 12152:
+// "Server javobi buzilgan"). Shuning uchun uch manba ketma-ket tekshiriladi:
+//
+//   1. Allaqachon o'rnatilgan  — qayta o'rnatish/yangilash holati
+//   2. setup.exe YONIDA        — foydalanuvchi modelni brauzer, yuklab olish
+//                                menejeri, Telegram yoki fleshka orqali olib,
+//                                setup.exe yoniga qo'yishi mumkin
+//   3. Internetdan yuklash     — 3 marta urinib ko'riladi
+//
+// Ikkinchi variant eng muhimi: internet ishonchsiz bo'lsa ham ilova
+// o'rnatiladi va model qo'lda olib kelinadi.
+
 var
   DownloadPage: TDownloadWizardPage;
-  ModelDownloaded: Boolean;
+  ModelSource: String;      // ko'chirish uchun manba; bo'sh = ko'chirish shart emas
 
 function OnDownloadProgress(const Url, FileName: String; const Progress, ProgressMax: Int64): Boolean;
 begin
@@ -137,22 +167,94 @@ begin
   Result := True;
 end;
 
-// Model allaqachon o'rnatilganmi (qayta o'rnatish yoki yangilash holati).
-//
-// Busiz har qayta o'rnatishda 785 MB qaytadan yuklanardi. Hajmi bo'yicha
-// tekshiramiz — buzuq yoki chala yuklangan fayl o'tib ketmasligi uchun.
-function ModelAlreadyInstalled(): Boolean;
+// Fayl bor va hajmi to'g'rimi (chala yuklangan fayl o'tib ketmasligi uchun).
+function ModelFileValid(const Path: String): Boolean;
 var
-  Path: String;
   Size: Int64;
 begin
   Result := False;
-  Path := ExpandConstant('{app}\models\ggml-rubaistt.bin');
   if not FileExists(Path) then
     Exit;
   if not FileSize64(Path, Size) then
     Exit;
   Result := (Size = {#ModelSize});
+end;
+
+function ModelAlreadyInstalled(): Boolean;
+begin
+  Result := ModelFileValid(ExpandConstant('{app}\models\ggml-rubaistt.bin'));
+end;
+
+// setup.exe yonidagi model (2-manba).
+function LocalModelPath(): String;
+begin
+  Result := ExpandConstant('{src}\ggml-rubaistt.bin');
+end;
+
+// Internetdan yuklash, N marta urinib. Muvaffaqiyatda True.
+//
+// Uzilish ko'pincha vaqtinchalik bo'ladi, shuning uchun bitta xatodan keyin
+// darhol taslim bo'lmaymiz.
+function TryDownload(Attempts: Integer; var ErrText: String): Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  ErrText := '';
+  for I := 1 to Attempts do
+  begin
+    try
+      if WizardSilent() then
+        DownloadTemporaryFile('{#ModelUrl}', 'ggml-rubaistt.bin', '{#ModelSha256}', nil)
+      else
+      begin
+        DownloadPage.Clear;
+        DownloadPage.Add('{#ModelUrl}', 'ggml-rubaistt.bin', '{#ModelSha256}');
+        DownloadPage.Download;
+      end;
+      Result := True;
+      Exit;
+    except
+      ErrText := GetExceptionMessage;
+    end;
+  end;
+end;
+
+// Modelni tayyorlaydi. Bo'sh satr = muvaffaqiyat, aks holda xato matni.
+function AcquireModel(): String;
+var
+  ErrText: String;
+begin
+  Result := '';
+  ModelSource := '';
+
+#ifdef BundleModel
+  // Oflayn variant: model o'rnatuvchi ichida, [Files] uni o'zi joylaydi.
+  Exit;
+#endif
+
+  if ModelAlreadyInstalled() then
+    Exit;
+
+  // 2-manba: setup.exe yonida
+  if ModelFileValid(LocalModelPath()) then
+  begin
+    ModelSource := LocalModelPath();
+    Exit;
+  end;
+
+  // 3-manba: internet
+  if not WizardSilent() then
+    DownloadPage.Show;
+  try
+    if TryDownload(3, ErrText) then
+      ModelSource := ExpandConstant('{tmp}\ggml-rubaistt.bin')
+    else
+      Result := FmtMessage(ExpandConstant('{cm:ModelFailed}'), [ErrText]);
+  finally
+    if not WizardSilent() then
+      DownloadPage.Hide;
+  end;
 end;
 
 procedure InitializeWizard;
@@ -163,60 +265,33 @@ begin
     @OnDownloadProgress);
 end;
 
-// Oynali (odatiy) o'rnatish: progress ko'rsatib yuklaymiz.
+// Oynali (odatiy) o'rnatish.
 function NextButtonClick(CurPageID: Integer): Boolean;
+var
+  ErrText: String;
 begin
   Result := True;
-  ModelDownloaded := False;
-
   if CurPageID <> wpReady then
     Exit;
 
-  // Model joyida bo'lsa qayta yuklamaymiz — 785 MB tejaladi.
-  if ModelAlreadyInstalled() then
-    Exit;
-
-  DownloadPage.Clear;
-  DownloadPage.Add('{#ModelUrl}', 'ggml-rubaistt.bin', '{#ModelSha256}');
-  DownloadPage.Show;
-  try
-    try
-      DownloadPage.Download;
-      ModelDownloaded := True;
-    except
-      SuppressibleMsgBox(
-        FmtMessage(ExpandConstant('{cm:ModelFailed}'), [GetExceptionMessage]),
-        mbCriticalError, MB_OK, IDOK);
-      Result := False;
-    end;
-  finally
-    DownloadPage.Hide;
+  ErrText := AcquireModel();
+  if ErrText <> '' then
+  begin
+    SuppressibleMsgBox(ErrText, mbCriticalError, MB_OK, IDOK);
+    Result := False;      // "Ready" sahifasida qolamiz, qayta urinish mumkin
   end;
 end;
 
 // Jimgina o'rnatish (/SILENT, /VERYSILENT).
 //
 // MUHIM: NextButtonClick sehrgar hodisasi — jim rejimda sehrgar ishlamaydi
-// va u UMUMAN chaqirilmaydi. Shu sababli model yuklanmay qolib, ilova
-// "Model fayli topilmadi" deb ishlamas edi. PrepareToInstall esa ikkala
-// rejimda ham chaqiriladi.
+// va u UMUMAN chaqirilmaydi. PrepareToInstall esa ikkala rejimda ham
+// chaqiriladi.
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
-
-  if not WizardSilent() then
-    Exit;                       // oynali rejimda yuqoridagi kod ishlagan
-
-  ModelDownloaded := False;
-  if ModelAlreadyInstalled() then
-    Exit;
-
-  try
-    DownloadTemporaryFile('{#ModelUrl}', 'ggml-rubaistt.bin', '{#ModelSha256}', nil);
-    ModelDownloaded := True;
-  except
-    Result := FmtMessage(ExpandConstant('{cm:ModelFailed}'), [GetExceptionMessage]);
-  end;
+  if WizardSilent() then
+    Result := AcquireModel();
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -226,16 +301,16 @@ begin
   if CurStep <> ssPostInstall then
     Exit;
 
-  // Model qayta yuklanmagan bo'lsa (allaqachon joyida) — hech narsa qilmaymiz.
-  if not ModelDownloaded then
+  // Manba bo'sh — model allaqachon joyida, ko'chirish shart emas.
+  if ModelSource = '' then
     Exit;
 
-  // Yuklab olingan model o'rnatish papkasiga ko'chiriladi.
+  // Model o'rnatish papkasiga ko'chiriladi.
   //
   // Model Program Files ichida saqlanadi — bu yo'l har doim lotin
   // harflarda. whisper.cpp fayl yo'lini char* sifatida ochadi, shuning
   // uchun foydalanuvchi papkasi (C:\Users\Аброр\...) xavfli bo'lardi.
-  Src := ExpandConstant('{tmp}\ggml-rubaistt.bin');
+  Src := ModelSource;
   Dst := ExpandConstant('{app}\models\ggml-rubaistt.bin');
 
   if not CopyFile(Src, Dst, False) then

@@ -15,7 +15,10 @@
 param(
     [string]$WorkDir = "D:\rubai",     # whisper.cpp va build artefaktlari (katta)
     [switch]$SkipWhisper,
-    [switch]$NoInstaller
+    [switch]$NoInstaller,
+    # Oflayn o'rnatuvchi: model .exe ichiga joylanadi (~800 MB), internet
+    # kerak emas. Ishonchsiz ulanishli foydalanuvchilar uchun.
+    [string]$BundleModel = ""
 )
 
 $ErrorActionPreference = 'Stop'
@@ -226,9 +229,21 @@ if (-not $iscc) { Fail "Inno Setup topilmadi. winget install JRSoftware.InnoSetu
 
 Step "O'rnatuvchi"
 New-Item -ItemType Directory -Force $DistDir | Out-Null
-& $iscc "/DSourceDir=$AppOut" (Join-Path $PSScriptRoot 'installer\rubai.iss')
+
+$isccArgs = @("/DSourceDir=$AppOut")
+if ($BundleModel) {
+    if (-not (Test-Path $BundleModel)) { Fail "Model topilmadi: $BundleModel" }
+    $size = (Get-Item $BundleModel).Length
+    if ($size -ne 823369796) { Fail "Model hajmi noto'g'ri ($size bayt) — fayl chala yoki boshqa versiya" }
+    Write-Host "  Oflayn variant: model ichiga joylanadi ($([math]::Round($size/1MB)) MB)"
+    $isccArgs += "/DBundleModel=$BundleModel"
+}
+$isccArgs += (Join-Path $PSScriptRoot 'installer\rubai.iss')
+
+& $iscc @isccArgs
 if ($LASTEXITCODE -ne 0) { Fail "o'rnatuvchi yig'ilmadi" }
 
-$setup = Get-ChildItem $DistDir -Filter '*setup.exe' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+$mask = if ($BundleModel) { '*oflayn-setup.exe' } else { '*[0-9]-setup.exe' }
+$setup = Get-ChildItem $DistDir -Filter $mask | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 Step "TAYYOR"
 Write-Host "  $($setup.FullName)  ($([math]::Round($setup.Length/1MB,1)) MB)" -ForegroundColor Green

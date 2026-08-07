@@ -122,6 +122,12 @@
   .btn:hover { background: var(--accent-sw); }
   .btn svg { width: 19px; height: 19px; }
   .platform .size { font-size: .88rem; color: var(--ink-mute); margin-top: 11px; text-align: center; }
+  .platform .alt {
+    font-size: .86rem; color: var(--ink-mute); margin-top: 10px; text-align: center;
+    padding-top: 10px; border-top: 1px solid var(--line-soft); line-height: 1.45;
+  }
+  .platform .alt a { color: var(--accent); text-decoration: none; font-weight: 600; }
+  .platform .alt a:hover { text-decoration: underline; }
 
   /* ------------------------------------------------------------ bo'limlar */
 
@@ -284,6 +290,11 @@
         Windows uchun yuklab olish
       </a>
       <p class="size">.exe · 8 MB · model o'rnatishda yuklanadi</p>
+      <p class="alt">
+        Internet sekin yoki uzilib qolsa —
+        <a href="https://github.com/MuhammadMirrr/uzbek-dictation/releases/download/v1.0/RubaiSTT-Diktovka-1.0.0-oflayn-setup.exe">to'liq versiya (749&nbsp;MB)</a>,
+        model ichida, internet kerak emas
+      </p>
     </div>
 
   </div>
@@ -358,6 +369,27 @@
         ogohlantirib beradi. Bluetooth quloqchin ham aniqlikni pasaytiradi —
         imkon bo'lsa oddiy mikrofon ishlating.
       </p>
+    </details>
+
+    <details>
+      <summary>Windows: «Model yuklab olinmadi» xatosi chiqsa</summary>
+      <p>
+        785 MB fayl uchun barqaror internet kerak. Ulanish uzilsa o'rnatuvchi
+        uch marta qayta uradi, keyin xato beradi. Ikkita yechim bor:
+      </p>
+      <ul>
+        <li>
+          <strong>To'liq versiyani yuklab oling</strong> — model uning ichida,
+          internet umuman kerak emas (yuqoridagi havola)
+        </li>
+        <li>
+          Yoki modelni <strong>alohida yuklab oling</strong> (brauzer yoki yuklab
+          olish menejeri bilan — ular uzilishdan keyin davom ettiradi), so'ng
+          <code>ggml-rubaistt.bin</code> faylini <code>setup.exe</code> turgan
+          papkaga qo'ying va o'rnatuvchini qayta ishga tushiring. U faylni
+          o'zi topadi.
+        </li>
+      </ul>
     </details>
 
     <details>

@@ -10,9 +10,26 @@ bir xil inference parametrlari.
 
 ## O'rnatish
 
-1. `RubaiSTT-Diktovka-1.0.0-setup.exe` ni yuklab oling
-2. Ishga tushiring — o'rnatish paytida til modeli (785 MB) avtomatik yuklanadi
-3. Birinchi ishga tushishda Sozlamalar oynasi ochiladi — **mikrofoningizni tanlang**
+Ikkita variant bor:
+
+| Fayl | Hajm | Qachon |
+|---|---|---|
+| `...-setup.exe` | 8 MB | Internet barqaror bo'lsa — model o'rnatish paytida yuklanadi |
+| `...-oflayn-setup.exe` | 749 MB | **Internet sekin yoki uzilib qolsa** — model ichida, ulanish kerak emas |
+
+1. Fayllardan birini yuklab oling va ishga tushiring
+2. Birinchi ochilishda Sozlamalar oynasi chiqadi — **mikrofoningizni tanlang**
+
+### Model yuklab olinmasa
+
+Oddiy o'rnatuvchi modelni GitHub'dan oladi. Ulanish uzilsa u uch marta qayta
+uradi, keyin xato beradi. Uchta yo'l bor (o'rnatuvchi shu tartibda qaraydi):
+
+1. **Model allaqachon o'rnatilgan** — qayta o'rnatishda qaytadan yuklanmaydi
+2. **`ggml-rubaistt.bin` ni `setup.exe` yoniga qo'ying** — o'rnatuvchi uni
+   o'zi topadi va internetsiz o'rnatadi. Faylni brauzer yoki yuklab olish
+   menejeri bilan alohida olish mumkin (ular uzilishdan keyin davom ettiradi)
+3. **Oflayn o'rnatuvchi** — model uning ichida
 
 > **Muhim:** mikrofonni albatta tanlang. Windows'da standart qurilma ba'zan
 > "Stereo Mix" bo'lib qoladi — u ovozingizni emas, kompyuter ovozini yozadi.
