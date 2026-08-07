@@ -1,10 +1,38 @@
-# 🎙️ RubaiSTT Dictation — O'zbekcha ovozli yozuv (macOS)
+# 🎙️ RubaiSTT Dictation — O'zbekcha ovozli yozuv
 
-Istalgan ilovada (Telegram, Messages, brauzer, hujjat — qayerda kursor bo'lsa) **⌃⌥D** bosib o'zbekcha gapiring — matn avtomatik o'sha joyga lotin alifbosida yoziladi.
+Istalgan ilovada (Telegram, brauzer, hujjat — qayerda kursor bo'lsa) tugmani bosib o'zbekcha gapiring — matn avtomatik o'sha joyga lotin alifbosida yoziladi.
 
-macOS'ning o'rnatilgan diktovkasi kabi, lekin **o'zbek tili uchun maxsus**, **butunlay oflayn** (internetsiz), va **bepul**.
+**Ikkala platforma uchun ham tayyor:**
 
-> System-wide Uzbek speech-to-text dictation for macOS. Press **⌃⌥D** anywhere, speak Uzbek, and the transcribed text is typed into the focused field. Powered by the [rubaiSTT](https://huggingface.co/islomov/rubaistt_v2_medium) model running locally via [whisper.cpp](https://github.com/ggml-org/whisper.cpp) with Metal acceleration. Fully offline.
+| Platforma | Tugma | Yuklab olish | Texnik hujjat |
+|---|---|---|---|
+| **macOS** 13+ | ⌃⌥D | [.dmg (785 MB)](https://github.com/MuhammadMirrr/uzbek-dictation/releases) | shu hujjat |
+| **Windows** 10/11 | Ctrl+Alt+D | [.exe (8 MB)](https://github.com/MuhammadMirrr/uzbek-dictation/releases) | [win/README.md](win/README.md) |
+
+Ikkala versiya bir xil modeldan (`rubaiSTT v2 medium`) va bir xil inference parametrlaridan
+foydalanadi — natijalar bir xil bo'ladi. Tizimning o'rnatilgan diktovkasi kabi, lekin
+**o'zbek tili uchun maxsus**, **butunlay oflayn** (internetsiz), va **bepul**.
+
+> System-wide Uzbek speech-to-text dictation for **macOS and Windows**. Press the hotkey
+> anywhere, speak Uzbek, and the transcribed text is typed into the focused field.
+> Powered by the [rubaiSTT](https://huggingface.co/islomov/rubaistt_v2_medium) model running
+> locally via [whisper.cpp](https://github.com/ggml-org/whisper.cpp) — Metal on macOS,
+> Vulkan on Windows. Fully offline.
+
+---
+
+## 🗂 Repozitoriy tuzilishi
+
+```
+src/          macOS ilovasi (Swift + C shim)
+win/          Windows ilovasi (C++20 + Win32)   -> win/README.md
+scripts/      macOS release skriptlari
+web/          yuklab olish sahifasi
+assets/       ikonkalar
+```
+
+Windows portining texnik tafsilotlari, o'lchangan ko'rsatkichlar va sinovda topilgan
+xatolar: [WINDOWS-PORT-PLAN.md](WINDOWS-PORT-PLAN.md)
 
 ---
 

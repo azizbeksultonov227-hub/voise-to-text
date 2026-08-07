@@ -1,6 +1,19 @@
 # AGENTS.md
 
-Uzbek speech-to-text menu-bar app for macOS. Single-file Swift (`src/dictate.swift`) + C shim over whisper.cpp, no package manager, no test suite.
+Uzbek speech-to-text dictation app for **macOS and Windows**. Same model, same
+inference parameters, two native implementations.
+
+- **macOS** — single-file Swift (`src/dictate.swift`) + C shim over whisper.cpp (Metal).
+  Documented below.
+- **Windows** — C++20 / Win32 in `win/` (Vulkan). See **`win/README.md`** for its build,
+  layout and conventions; **`WINDOWS-PORT-PLAN.md`** for the porting decisions and the
+  bugs found during testing.
+
+`win/core/whisper_bridge.c` is a near-verbatim copy of `src/whisper_bridge.c` — keep the
+inference parameters (language `uz`, beam size 5, `no_speech_thold 0.25`) identical in both
+so the two platforms produce the same output.
+
+No package manager, no test suite on either side.
 
 ## Language
 
