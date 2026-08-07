@@ -94,7 +94,7 @@ bool saveSettings(const Settings& s) {
     if (path.empty()) return false;
 
     std::wostringstream o;
-    o << L"# RubaiSTT Dictation sozlamalari\n"
+    o << L"# Audio-Matnga sozlamalari\n"
       << L"# Bu faylni qo'lda tahrirlash mumkin. Ilovani qayta ishga tushiring.\n\n"
       << L"hotkey.vk="          << s.vkCode        << L"\n"
       << L"hotkey.modifiers="   << s.modifiers     << L"\n"

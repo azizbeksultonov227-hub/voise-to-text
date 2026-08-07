@@ -1,4 +1,4 @@
-# 🎙️ RubaiSTT Dictation — O'zbekcha ovozli yozuv
+# 🎙️ Audio-Matnga — O'zbekcha ovozli yozuv
 
 Istalgan ilovada (Telegram, brauzer, hujjat — qayerda kursor bo'lsa) tugmani bosib o'zbekcha gapiring — matn avtomatik o'sha joyga lotin alifbosida yoziladi.
 
@@ -12,6 +12,11 @@ Istalgan ilovada (Telegram, brauzer, hujjat — qayerda kursor bo'lsa) tugmani b
 Ikkala versiya bir xil modeldan (`rubaiSTT v2 medium`) va bir xil inference parametrlaridan
 foydalanadi — natijalar bir xil bo'ladi. Tizimning o'rnatilgan diktovkasi kabi, lekin
 **o'zbek tili uchun maxsus**, **butunlay oflayn** (internetsiz), va **bepul**.
+
+> **Nom haqida:** mahsulot nomi — **Audio-Matnga**. Windows ilovasi shu nom bilan
+> o'rnatiladi. macOS ilovasining bundle nomi hozircha `RubaiSTT Dictation.app`
+> bo'lib qolgan: uni o'zgartirsak, mavjud Mac foydalanuvchilari Accessibility
+> ruxsatini qaytadan berishga majbur bo'ladi va avtostart uziladi.
 
 > System-wide Uzbek speech-to-text dictation for **macOS and Windows**. Press the hotkey
 > anywhere, speak Uzbek, and the transcribed text is typed into the focused field.

@@ -1,4 +1,4 @@
-; RubaiSTT Diktovka — Windows o'rnatuvchisi (Inno Setup 6).
+; Audio-Matnga — Windows o'rnatuvchisi (Inno Setup 6).
 ;
 ; Model (785 MB) o'rnatuvchi ichiga QO'SHILMAYDI — u o'rnatish paytida
 ; yuklab olinadi. Sabablari:
@@ -9,17 +9,20 @@
 ;
 ; Build: iscc rubai.iss  (SourceDir = build natijasi)
 
-#define AppName        "RubaiSTT Diktovka"
+#define AppName        "Audio-Matnga"
 #define AppVersion     "1.0.0"
-#define AppPublisher   "RubaiSTT"
-#define AppExe         "RubaiSTT.exe"
+#define AppPublisher   "Muhammad Mirkabilov"
+#define AppExe         "AudioMatnga.exe"
 #define AppUrl         "https://github.com/MuhammadMirrr/uzbek-dictation"
 #define ModelUrl       "https://github.com/MuhammadMirrr/uzbek-dictation/releases/download/v1.0/ggml-rubaistt.bin"
 #define ModelSha256    "1b02df434902015e1464611a7748927e42fcb55c49791c85239cf713c8edc1a3"
 #define ModelSize      823369796
 
 [Setup]
-AppId={{7F3A9C21-4E56-4B8D-9A17-2C6E5D8B1A40}
+; Nom o'zgargani uchun yangi ID — o'rnatish papkasi ham yangi
+; (C:\Program Files\Audio-Matnga). Eski "RubaiSTT" o'rnatmasi
+; InitializeSetup ichida avtomatik olib tashlanadi.
+AppId={{2D8B5E14-7A93-4C61-B0F2-8E5D3A6C9147}
 AppName={#AppName}
 AppVersion={#AppVersion}
 ; Busiz Windows "Ilovalar" ro'yxatida "... version 1.0.0" deb ko'rsatadi.
@@ -27,14 +30,14 @@ AppVerName={#AppName} {#AppVersion}
 AppPublisher={#AppPublisher}
 AppPublisherURL={#AppUrl}
 AppSupportURL={#AppUrl}
-DefaultDirName={autopf}\RubaiSTT
+DefaultDirName={autopf}\Audio-Matnga
 DefaultGroupName={#AppName}
 UninstallDisplayIcon={app}\{#AppExe}
 OutputDir=..\..\dist
 #ifdef BundleModel
-OutputBaseFilename=RubaiSTT-Diktovka-{#AppVersion}-oflayn-setup
+OutputBaseFilename=Audio-Matnga-{#AppVersion}-oflayn-setup
 #else
-OutputBaseFilename=RubaiSTT-Diktovka-{#AppVersion}-setup
+OutputBaseFilename=Audio-Matnga-{#AppVersion}-setup
 #endif
 Compression=lzma2/max
 SolidCompression=yes
@@ -74,7 +77,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "Q
 
 [Files]
 ; Ilova va whisper.cpp kutubxonalari.
-Source: "{#SourceDir}\RubaiSTT.exe";       DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\AudioMatnga.exe";       DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\whisper.dll";        DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\ggml.dll";           DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\ggml-base.dll";      DestDir: "{app}"; Flags: ignoreversion
@@ -131,7 +134,8 @@ Name: "{autodesktop}\{#AppName}";          Filename: "{app}\{#AppExe}"; Tasks: d
 ; FOYDALANUVCHI nomidan ishga tushadi. Busiz sozlamalar va avtostart
 ; administrator profiliga yozilib qolardi.
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchApp}"; \
-    Flags: nowait postinstall skipifsilent runasoriginaluser
+    Flags: nowait postinstall skipifsilent runasoriginaluser; \
+    Check: AppWasNotRunning
 
 [UninstallDelete]
 ; Model o'rnatuvchi bilan kelmagani uchun [Files] uni bilmaydi — qo'lda
@@ -159,6 +163,54 @@ Type: dirifempty; Name: "{app}\models"
 var
   DownloadPage: TDownloadWizardPage;
   ModelSource: String;      // ko'chirish uchun manba; bo'sh = ko'chirish shart emas
+  AppWasRunning: Boolean;   // yangilashdan oldin ilova ochiq edimi
+
+// Yangilashdan oldin ilova ishlab turganini eslab qolamiz.
+//
+// Ilova avtostartda bo'lgani uchun foydalanuvchida u deyarli doim ochiq.
+// Windows RestartManager fayllarni almashtirish uchun uni yopadi, lekin
+// qaytadan ochmaydi — foydalanuvchi esa ilova yo'qolgan deb o'ylaydi.
+// Shuning uchun oxirida o'zimiz qayta ishga tushiramiz.
+// Eski "RubaiSTT" nomli o'rnatmani topib, jimgina olib tashlaydi.
+//
+// Ilova nomi Audio-Matnga ga o'zgardi va AppId ham yangi. Busiz
+// foydalanuvchida "Ilovalar" ro'yxatida ikkita yozuv va diskda ikkita
+// nusxa (785 MB model ikki marta!) qolib ketardi.
+procedure RemoveOldVersion();
+var
+  OldAppId, UninstallCmd: String;
+  ResultCode: Integer;
+begin
+  OldAppId := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\' +
+              '{7F3A9C21-4E56-4B8D-9A17-2C6E5D8B1A40}_is1';
+
+  if not RegQueryStringValue(HKLM, OldAppId, 'UninstallString', UninstallCmd) then
+    if not RegQueryStringValue(HKCU, OldAppId, 'UninstallString', UninstallCmd) then
+      Exit;
+
+  UninstallCmd := RemoveQuotes(UninstallCmd);
+  if not FileExists(UninstallCmd) then
+    Exit;
+
+  Exec(UninstallCmd, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART',
+       '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
+function InitializeSetup(): Boolean;
+begin
+  Result := True;
+  AppWasRunning := CheckForMutexes('Global\AudioMatngaSingleInstance') or
+                   CheckForMutexes('Global\RubaiSTTDictationSingleInstance');
+  RemoveOldVersion();
+end;
+
+// [Run] bo'limi uchun: ilova avval ishlamayotgan bo'lsagina "ishga tushirish"
+// katagi ko'rsatiladi. Aks holda ikki marta ishga tushib, ikkinchi nusxa
+// Sozlamalar oynasini ochib yuborardi.
+function AppWasNotRunning(): Boolean;
+begin
+  Result := not AppWasRunning;
+end;
 
 function OnDownloadProgress(const Url, FileName: String; const Progress, ProgressMax: Int64): Boolean;
 begin
@@ -297,7 +349,20 @@ end;
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   Src, Dst: String;
+  ResultCode: Integer;
 begin
+  // Yangilash tugadi — yopib qo'yilgan ilovani qaytadan ishga tushiramiz.
+  //
+  // ExecAsOriginalUser: o'rnatuvchi administrator huquqida ishlaydi, ilova
+  // esa oddiy foydalanuvchi nomidan ishlashi kerak. Aks holda sozlamalar
+  // va avtostart administrator profiliga yozilib qolardi.
+  if (CurStep = ssDone) and AppWasRunning then
+  begin
+    ExecAsOriginalUser(ExpandConstant('{app}\{#AppExe}'), '', '',
+                       SW_SHOWNORMAL, ewNoWait, ResultCode);
+    Exit;
+  end;
+
   if CurStep <> ssPostInstall then
     Exit;
 

@@ -24,13 +24,13 @@ BEGIN
         // kombinatsiyani standart sifatida kutadi.
         BLOCK "040904B0"
         BEGIN
-            VALUE "CompanyName",      "RubaiSTT"
+            VALUE "CompanyName",      "Muhammad Mirkabilov"
             VALUE "FileDescription",  "O'zbekcha ovozli yozuv"
             VALUE "FileVersion",      "1.0.0.0"
-            VALUE "InternalName",     "RubaiSTT"
+            VALUE "InternalName",     "AudioMatnga"
             VALUE "LegalCopyright",   "MIT litsenziyasi"
-            VALUE "OriginalFilename", "RubaiSTT.exe"
-            VALUE "ProductName",      "RubaiSTT Diktovka"
+            VALUE "OriginalFilename", "AudioMatnga.exe"
+            VALUE "ProductName",      "Audio-Matnga"
             VALUE "ProductVersion",   "1.0.0.0"
         END
     END

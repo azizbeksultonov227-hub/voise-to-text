@@ -10,12 +10,13 @@
 #include "../core/audio_capture.h"
 #include "../core/util.h"
 #include "autostart.h"
+#include "donate_window.h"
 
 namespace rubai {
 
 namespace {
 
-constexpr wchar_t kClassName[] = L"RubaiSTTSettings";
+constexpr wchar_t kClassName[] = L"AudioMatngaSettings";
 
 enum CtrlId : int {
     kIdHotkey = 200,
@@ -27,11 +28,16 @@ enum CtrlId : int {
     kIdSave,
     kIdCancel,
     kIdReset,
+    kIdDonate,
 };
 
 // Oyna o'lchamlari 96 DPI da; DPI bo'yicha masshtablanadi.
 constexpr int kWinW = 460;
 constexpr int kWinH = 400;
+
+// Donat tugmasi ranglari — sayt palitrasidan.
+const COLORREF kDonateBg      = RGB(169, 78, 46);
+const COLORREF kDonateBgHover = RGB(142, 63, 36);
 
 // HOTKEY boshqaruvi HOTKEYF_* bayroqlarini beradi, RegisterHotKey esa
 // MOD_* kutadi — ular boshqacha qiymatlar.
@@ -103,6 +109,7 @@ struct SettingsWindow::Impl {
     Settings settings;
     std::vector<MicDevice> mics;
     std::function<void(const Settings&)> onSaved;
+    DonateWindow donate;
 
     int scale(int v) const { return MulDiv(v, (int)dpi, 96); }
 
@@ -144,8 +151,41 @@ LRESULT CALLBACK settingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 case kIdMic:
                     if (HIWORD(wp) == CBN_SELCHANGE) d->updateMicWarning();
                     return 0;
+                case kIdDonate:
+                    d->donate.show(d->instance, hwnd);
+                    return 0;
             }
             break;
+
+        // Donat tugmasini o'zimiz chizamiz — Windows'ning standart tugmasi
+        // rang qabul qilmaydi, bu esa ajralib turishi kerak.
+        case WM_DRAWITEM: {
+            auto* di = (DRAWITEMSTRUCT*)lp;
+            if (!d || di->CtlID != kIdDonate) break;
+
+            const bool pressed = (di->itemState & ODS_SELECTED) != 0;
+            const bool focused = (di->itemState & ODS_FOCUS) != 0;
+
+            HBRUSH b = CreateSolidBrush(pressed ? kDonateBgHover : kDonateBg);
+            FillRect(di->hDC, &di->rcItem, b);
+            DeleteObject(b);
+
+            if (focused) {
+                RECT f = di->rcItem;
+                InflateRect(&f, -3, -3);
+                DrawFocusRect(di->hDC, &f);
+            }
+
+            SetBkMode(di->hDC, TRANSPARENT);
+            SetTextColor(di->hDC, RGB(255, 255, 255));
+            HFONT old = (HFONT)SelectObject(di->hDC, d->font);
+            wchar_t text[64] = {};
+            GetWindowTextW(di->hwndItem, text, 64);
+            DrawTextW(di->hDC, text, -1, &di->rcItem,
+                      DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            SelectObject(di->hDC, old);
+            return TRUE;
+        }
 
         case WM_CLOSE:
             ShowWindow(hwnd, SW_HIDE);
@@ -208,6 +248,14 @@ void SettingsWindow::Impl::build() {
         BS_AUTOCHECKBOX | WS_TABSTOP, 24, 278, 402, 22, kIdAutoStart);
     add(L"BUTTON", L"Videokartadan foydalanish (tezroq)",
         BS_AUTOCHECKBOX | WS_TABSTOP, 24, 304, 402, 22, kIdUseGpu);
+
+    // --- Donat tugmasi
+    //
+    // Ataylab chapda, Saqlash/Bekor qilishdan uzoqda — tasodifan bosilmasin.
+    // Rangi bilan ajralib turadi (BS_OWNERDRAW orqali o'zimiz chizamiz),
+    // lekin o'lchami kichik va hech narsani to'smaydi.
+    add(L"BUTTON", L"\x2665  Donat qilish", BS_OWNERDRAW | WS_TABSTOP,
+        24, 342, 132, 30, kIdDonate);
 
     // --- Tugmalar
     add(L"BUTTON", L"Saqlash", BS_DEFPUSHBUTTON | WS_TABSTOP, 236, 342, 92, 30, kIdSave);
@@ -344,7 +392,7 @@ void SettingsWindow::show(HINSTANCE instance, const Settings& current) {
         RegisterClassExW(&wc);
 
         d->hwnd = CreateWindowExW(
-            0, kClassName, L"RubaiSTT — Sozlamalar",
+            0, kClassName, L"Audio-Matnga — Sozlamalar",
             WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
             CW_USEDEFAULT, CW_USEDEFAULT, 100, 100,
             nullptr, nullptr, instance, d);

@@ -1,4 +1,4 @@
-﻿# RubaiSTT Diktovka — Windows uchun to'liq build.
+﻿# Audio-Matnga — Windows uchun to'liq build.
 #
 # Bajaradi: whisper.cpp (Vulkan) -> ilova -> o'rnatuvchi.
 #
@@ -106,7 +106,7 @@ $AppOut = Join-Path $AppBld 'Release'
 
 # Kerakli fayllar bor-yo'qligini tekshiramiz — o'rnatuvchi jimgina
 # yarim-ishlaydigan paket yig'ib qo'ymasligi uchun.
-$required = @('RubaiSTT.exe', 'whisper.dll', 'ggml.dll', 'ggml-base.dll', 'ggml-vulkan.dll')
+$required = @('AudioMatnga.exe', 'whisper.dll', 'ggml.dll', 'ggml-base.dll', 'ggml-vulkan.dll')
 foreach ($f in $required) {
     if (-not (Test-Path (Join-Path $AppOut $f))) { Fail "$f topilmadi ($AppOut)" }
 }

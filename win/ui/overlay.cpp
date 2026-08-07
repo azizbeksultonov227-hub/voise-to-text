@@ -13,7 +13,7 @@ namespace rubai {
 
 namespace {
 
-constexpr wchar_t kClassName[] = L"RubaiSTTOverlay";
+constexpr wchar_t kClassName[] = L"AudioMatngaOverlay";
 constexpr UINT kTimerHide = 1;
 
 constexpr int kBaseWidth   = 340;

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(RubaiSTT LANGUAGES C CXX)
+project(AudioMatnga LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -63,23 +63,24 @@ target_link_libraries(rubai-cli PRIVATE rubai_core)
 
 # ------------------------------------------------------------------- ilova
 
-add_executable(RubaiSTT WIN32
+add_executable(AudioMatnga WIN32
     ui/app.cpp
     ui/autostart.cpp
     ui/inserter.cpp
     ui/overlay.cpp
     ui/settings_window.cpp
+    ui/donate_window.cpp
     res/app.rc
 )
-target_link_libraries(RubaiSTT PRIVATE rubai_core comctl32 dwmapi)
+target_link_libraries(AudioMatnga PRIVATE rubai_core comctl32 dwmapi)
 
 # Manifest res/app.rc orqali joylanadi. Linker'ning o'z manifestini
 # o'chiramiz, aks holda ikkita RT_MANIFEST resursi to'qnashadi (CVT1100).
-set_target_properties(RubaiSTT PROPERTIES LINK_FLAGS "/MANIFEST:NO")
+set_target_properties(AudioMatnga PROPERTIES LINK_FLAGS "/MANIFEST:NO")
 
-add_custom_command(TARGET RubaiSTT POST_BUILD
+add_custom_command(TARGET AudioMatnga POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
-            "${WHISPER_BUILD}/bin/Release" "$<TARGET_FILE_DIR:RubaiSTT>"
+            "${WHISPER_BUILD}/bin/Release" "$<TARGET_FILE_DIR:AudioMatnga>"
     COMMENT "whisper.cpp DLL'lari nusxalanmoqda"
 )
 

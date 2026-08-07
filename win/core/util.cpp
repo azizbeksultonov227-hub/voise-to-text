@@ -55,7 +55,7 @@ static std::wstring knownFolder(REFKNOWNFOLDERID id) {
 static std::wstring subDir(REFKNOWNFOLDERID id) {
     std::wstring base = knownFolder(id);
     if (base.empty()) return {};
-    std::wstring dir = base + L"\\RubaiSTT";
+    std::wstring dir = base + L"\\Audio-Matnga";
     ensureDir(dir);
     return dir;
 }

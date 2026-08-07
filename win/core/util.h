@@ -17,10 +17,10 @@ std::wstring toWide(const std::string& s);
 // Ilova .exe joylashgan papka (oxirida \ yo'q).
 std::wstring exeDir();
 
-// %APPDATA%\RubaiSTT — sozlamalar. Papka yaratiladi.
+// %APPDATA%\Audio-Matnga — sozlamalar. Papka yaratiladi.
 std::wstring appDataDir();
 
-// %LOCALAPPDATA%\RubaiSTT — log va vaqtinchalik fayllar. Papka yaratiladi.
+// %LOCALAPPDATA%\Audio-Matnga — log va vaqtinchalik fayllar. Papka yaratiladi.
 std::wstring localAppDataDir();
 
 bool fileExists(const std::wstring& path);
@@ -41,7 +41,7 @@ bool ensureDir(const std::wstring& path);
 std::string pathForC(const std::wstring& path);
 
 // ---- Log -----------------------------------------------------------------
-// %LOCALAPPDATA%\RubaiSTT\dictation.log ga yozadi (thread-safe).
+// %LOCALAPPDATA%\Audio-Matnga\dictation.log ga yozadi (thread-safe).
 // macOS versiyasidagi RubaiLog bilan bir xil vazifa.
 void logInit();
 void logWrite(const std::wstring& msg);

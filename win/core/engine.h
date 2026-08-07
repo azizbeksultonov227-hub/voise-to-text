@@ -25,7 +25,7 @@ public:
     // Model faylini qidiradi. Tartib:
     //   1) <exe papkasi>\models\ggml-rubaistt.bin   (o'rnatilgan holat)
     //   2) <exe papkasi>\ggml-rubaistt.bin          (portable holat)
-    //   3) %LOCALAPPDATA%\RubaiSTT\models\...       (qo'lda qo'yilgan)
+    //   3) %LOCALAPPDATA%\Audio-Matnga\models\...       (qo'lda qo'yilgan)
     // Topilmasa bo'sh satr.
     static std::wstring findModel();
 

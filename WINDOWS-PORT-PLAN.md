@@ -1,4 +1,4 @@
-# RubaiSTT Dictation — Windows port rejasi
+# Audio-Matnga — Windows port rejasi
 
 macOS'dagi `src/dictate.swift` (Swift/AppKit) + `src/whisper_bridge.c` ilovasini
 Windows'ga ko'chirish rejasi. Mezon: **eng puxta natija**, vaqt cheklov emas.
@@ -9,7 +9,7 @@ Sana: 2026-08-07 · Maqsad platforma: Windows 10 1809+ / Windows 11, x64
 
 ## HOLAT (2026-08-07)
 
-**Ishlaydigan ilova va o'rnatuvchi tayyor.** `dist\RubaiSTT-Diktovka-1.0.0-setup.exe` (8 MB).
+**Ishlaydigan ilova va o'rnatuvchi tayyor.** `dist\Audio-Matnga-1.0.0-setup.exe` (8 MB).
 
 | Bosqich | Holat |
 |---|---|
@@ -350,7 +350,42 @@ Yuklab olish uzilsa — davom ettirish (HTTP Range) va SHA-256 tekshiruvi.
 
 ---
 
-## 10. Ochiq savollar
+## 10. Keng tarqatishdan OLDIN sinash kerak
+
+Ilova hozirgacha **bitta kompyuterda** sinalgan: Windows 11 Pro, RTX 3060,
+Ryzen 7 5800X, rus tilidagi interfeys. Minglab foydalanuvchiga tarqatishdan
+oldin quyidagilar tekshirilishi shart — har biri alohida xavf.
+
+### Sinalmagan va xavfli
+
+| Nima | Nega muhim | Qanday tekshirish |
+|---|---|---|
+| **AMD videokarta** | Vulkan yo'li AMD'da umuman sinalmagan | Radeon li kompyuterda o'rnatib, log'da `using Vulkan0 backend` borligini ko'rish |
+| **Intel integrated (UHD/Iris)** | O'zbekistondagi arzon noutbuklarda eng ko'p uchraydi | Log'da Vulkan yoki CPU'ga tushganini, tezlikni o'lchash |
+| **Videokartasiz / eski CPU** | CPU fallback real temirda sinalmagan | AVX2'siz protsessorda (2013 gacha) ishga tushishini ko'rish |
+| **Windows 10** | Faqat Windows 11 da sinalgan | 1809+ da o'rnatish va ishlatish |
+| **4 GB RAM li noutbuk** | Model ~1.2 GB video xotira oladi; Intel iGPU uni tizim xotirasidan oladi | Yuklanish va transkripsiya ishlashini ko'rish |
+| **Antivirus** | Imzosiz o'rnatuvchi + 785 MB yuklab olish — klassik false positive | Kaspersky, Avast, ESET, Windows Defender bilan sinash |
+
+### Foydalanuvchi to'siqlari
+
+- **SmartScreen** — imzosiz `.exe` uchun har bir foydalanuvchi
+  "Windows protected your PC" ogohlantirishini ko'radi va qo'shimcha ikki
+  marta bosishi kerak. Texnik bo'lmagan odamlarning katta qismi shu yerda
+  to'xtaydi. **Bu eng katta tarqatish to'sig'i.**
+  Yechim: kod imzosi sertifikati (~$200–400/yil).
+- **Log yuborish yo'li yo'q** — foydalanuvchi muammoni qanday xabar qilishini
+  bilmaydi. Tray menyusiga "Muammoni xabar qilish" qo'shilishi kerak.
+- **Crash handler yo'q** — ilova qulasa hech qanday ma'lumot qolmaydi.
+
+### Tavsiya
+
+10–20 kishilik sinov guruhi (turli videokarta, Windows 10 va 11, eski
+noutbuklar), bir hafta. Keyin keng tarqatish.
+
+---
+
+## 11. Ochiq savollar
 
 1. ~~**GPU backend**~~ → hal qilindi: Vulkan + CPU fallback (§4)
 2. ~~**Model yetkazish**~~ → hal qilindi: birinchi ishga tushishda yuklash (§9)

@@ -1,4 +1,4 @@
-// RubaiSTT Dictation — Windows ilovasi.
+// Audio-Matnga — Windows ilovasi.
 //
 // macOS versiyasidagi dictate.swift ning ekvivalenti. U bitta faylda
 // `// MARK:` bo'limlariga bo'lingan — bu yerda ham shunday tuzilma
@@ -27,9 +27,9 @@ namespace {
 
 // ---------------------------------------------------------------- doimiylar
 
-constexpr wchar_t kWindowClass[] = L"RubaiSTTHiddenWindow";
-constexpr wchar_t kMutexName[]   = L"Global\\RubaiSTTDictationSingleInstance";
-constexpr wchar_t kAppName[]     = L"RubaiSTT Diktovka";
+constexpr wchar_t kWindowClass[] = L"AudioMatngaHiddenWindow";
+constexpr wchar_t kMutexName[]   = L"Global\\AudioMatngaSingleInstance";
+constexpr wchar_t kAppName[]     = L"Audio-Matnga";
 
 constexpr UINT WM_RUBAI_TRAY   = WM_APP + 1;
 constexpr UINT WM_RUBAI_RESULT = WM_APP + 2;
@@ -472,7 +472,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     using namespace rubai;
 
     g_taskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
-    g_showSettings   = RegisterWindowMessageW(L"RubaiSTTShowSettings");
+    g_showSettings   = RegisterWindowMessageW(L"AudioMatngaShowSettings");
 
     // Ikkinchi nusxa ishga tushmasin — ikkita ilova bitta hotkey'ni
     // ushlab, kutilmagan xatti-harakat beradi.
@@ -488,7 +488,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         } else {
             // Oyna topilmadi (ilova yopilish jarayonida bo'lishi mumkin).
             MessageBoxW(nullptr,
-                        L"RubaiSTT Diktovka allaqachon ishlayapti.\n"
+                        L"Audio-Matnga allaqachon ishlayapti.\n"
                         L"Sozlamalar uchun vazifalar panelidagi 🎙 ikonkasini bosing.",
                         kAppName, MB_OK | MB_ICONINFORMATION);
         }

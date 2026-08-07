@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-  <assemblyIdentity type="win32" name="RubaiSTT.Dictation" version="1.0.0.0"
+  <assemblyIdentity type="win32" name="AudioMatnga" version="1.0.0.0"
                     processorArchitecture="amd64"/>
 
   <!-- Zamonaviy boshqaruv elementlari (Common Controls 6). Busiz tugmalar

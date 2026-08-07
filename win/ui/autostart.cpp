@@ -11,7 +11,7 @@ namespace rubai {
 namespace {
 
 constexpr wchar_t kRunKey[]   = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
-constexpr wchar_t kValueName[] = L"RubaiSTT Dictation";
+constexpr wchar_t kValueName[] = L"Audio-Matnga";
 
 std::wstring exePath() {
     std::wstring buf(MAX_PATH, L'\0');

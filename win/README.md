@@ -1,4 +1,4 @@
-# RubaiSTT Diktovka — Windows
+# Audio-Matnga — Windows
 
 O'zbekcha ovozli yozuv. Istalgan ilovada **Ctrl+Alt+D** bosing, gapiring, yana bosing —
 matn kursor turgan joyga yoziladi. To'liq oflayn, internetsiz.
@@ -95,7 +95,7 @@ powershell -ExecutionPolicy Bypass -File win\build.ps1
 ```
 
 whisper.cpp'ni Vulkan bilan yig'adi → ilovani build qiladi → o'rnatuvchi yasaydi.
-Natija: `dist\RubaiSTT-Diktovka-1.0.0-setup.exe`
+Natija: `dist\Audio-Matnga-1.0.0-setup.exe`
 
 Foydali bayroqlar:
 
@@ -145,8 +145,8 @@ Fayllar va papkalar:
 
 | Nima | Qayerda |
 |---|---|
-| Sozlamalar | `%APPDATA%\RubaiSTT\settings.ini` |
-| Log | `%LOCALAPPDATA%\RubaiSTT\dictation.log` |
+| Sozlamalar | `%APPDATA%\Audio-Matnga\settings.ini` |
+| Log | `%LOCALAPPDATA%\Audio-Matnga\dictation.log` |
 | Model | `<o'rnatilgan papka>\models\ggml-rubaistt.bin` |
 
 ---

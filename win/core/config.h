@@ -1,4 +1,4 @@
-// Foydalanuvchi sozlamalari — %APPDATA%\RubaiSTT\settings.ini
+// Foydalanuvchi sozlamalari — %APPDATA%\Audio-Matnga\settings.ini
 //
 // macOS versiyasida bu UserDefaults edi. Windows'da oddiy `kalit=qiymat`
 // UTF-8 matn fayli ishlatiladi: qo'lda tahrirlash oson, parser xatolari yo'q,
