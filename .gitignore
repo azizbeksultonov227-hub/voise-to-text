@@ -28,3 +28,6 @@ assets/dmg-bg.png
 
 # Mahalliy eslatma
 NEXT_SESSION.md
+
+# Cloudflare Wrangler keshi (hisob ID va loyiha nomi — repoda kerak emas)
+.wrangler/
