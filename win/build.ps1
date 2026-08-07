@@ -46,6 +46,10 @@ function Find-Tool($name, $paths) {
 $cmake = Find-Tool 'cmake' @("$env:ProgramFiles\CMake\bin\cmake.exe")
 if (-not $cmake) { Fail "CMake topilmadi. winget install Kitware.CMake" }
 
+# Visual Studio o'rnatilgan joyini topish uchun (VC++ runtime fayllari uchun kerak).
+$vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+if (-not (Test-Path $vswhere)) { $vswhere = $null }
+
 if (-not $env:VULKAN_SDK) {
     $vk = Get-ChildItem 'C:\VulkanSDK' -Directory -EA SilentlyContinue |
           Sort-Object Name -Descending | Select-Object -First 1
@@ -106,6 +110,51 @@ foreach ($f in $required) {
 $cpuDlls = @(Get-ChildItem $AppOut -Filter 'ggml-cpu-*.dll')
 if ($cpuDlls.Count -lt 2) { Fail "CPU backend DLL'lari yetishmaydi (GGML_CPU_ALL_VARIANTS o'chiqmi?)" }
 Write-Host "  CPU variantlari: $($cpuDlls.Count) ta"
+
+# ------------------------------------------------------- Visual C++ runtime
+#
+# Ilova va whisper.cpp DLL'lari MSVCP140.dll / VCRUNTIME140.dll ga bog'liq.
+# Bu fayllar TOZA WINDOWS'DA YO'Q — ular Visual C++ Redistributable bilan
+# keladi. Ishlab chiqish mashinasida bor (Build Tools o'rnatgan), shuning
+# uchun muammo sezilmaydi; foydalanuvchida esa ilova
+# "VCRUNTIME140.dll topilmadi" deb umuman ochilmaydi.
+#
+# Yechim: ularni ilova yoniga nusxalaymiz (Microsoft ruxsat bergan
+# "app-local deployment"). Alohida redistributable o'rnatish shart emas.
+#
+# api-ms-win-crt-*.dll nusxalanmaydi — ular Windows 10+ tarkibida.
+
+Step "Visual C++ runtime"
+
+$vsRoots = @(
+    $(if ($vswhere) { & $vswhere -latest -products * -property installationPath 2>$null }),
+    'D:\BuildTools',
+    "${env:ProgramFiles}\Microsoft Visual Studio\2022\Community",
+    "${env:ProgramFiles}\Microsoft Visual Studio\2022\BuildTools"
+) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
+
+$crtDir = $null
+foreach ($root in $vsRoots) {
+    $found = Get-ChildItem (Join-Path $root 'VC\Redist\MSVC') -Directory -EA SilentlyContinue |
+             Sort-Object Name -Descending |
+             ForEach-Object { Get-ChildItem (Join-Path $_.FullName 'x64') -Directory -Filter 'Microsoft.VC*.CRT' -EA SilentlyContinue } |
+             Select-Object -First 1
+    if ($found) { $crtDir = $found.FullName; break }
+}
+
+if (-not $crtDir) {
+    Fail "Visual C++ redistributable DLL'lari topilmadi.`n" +
+         "Build Tools o'rnatishda 'MSVC ... redistributable MSMs' komponenti kerak."
+}
+
+Write-Host "  Manba: $crtDir"
+$crtFiles = Get-ChildItem $crtDir -Filter *.dll
+Copy-Item $crtFiles.FullName -Destination $AppOut -Force
+Write-Host "  Nusxalandi: $($crtFiles.Count) ta fayl ($([math]::Round(($crtFiles | Measure-Object Length -Sum).Sum/1MB,2)) MB)"
+
+foreach ($f in @('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll')) {
+    if (-not (Test-Path (Join-Path $AppOut $f))) { Fail "$f nusxalanmadi" }
+}
 
 # --------------------------------------------------------------- o'rnatuvchi
 

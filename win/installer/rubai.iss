@@ -22,6 +22,8 @@
 AppId={{7F3A9C21-4E56-4B8D-9A17-2C6E5D8B1A40}
 AppName={#AppName}
 AppVersion={#AppVersion}
+; Busiz Windows "Ilovalar" ro'yxatida "... version 1.0.0" deb ko'rsatadi.
+AppVerName={#AppName} {#AppVersion}
 AppPublisher={#AppPublisher}
 AppPublisherURL={#AppUrl}
 AppSupportURL={#AppUrl}
@@ -80,6 +82,21 @@ Source: "{#SourceDir}\ggml-vulkan.dll";    DestDir: "{app}"; Flags: ignoreversio
 ; mos kelganini o'zi tanlaydi — shu sababli 2011 yildan keyingi har qanday
 ; x64 kompyuterda ishlaydi.
 Source: "{#SourceDir}\ggml-cpu-*.dll";     DestDir: "{app}"; Flags: ignoreversion
+
+; Visual C++ runtime.
+;
+; MSVCP140.dll / VCRUNTIME140.dll toza Windows'da YO'Q — ular Visual C++
+; Redistributable bilan keladi. Ularsiz ilova umuman ochilmaydi
+; ("VCRUNTIME140.dll topilmadi"). Ishlab chiqish mashinasida bor bo'lgani
+; uchun bu xato sinovda ko'rinmaydi.
+;
+; Ilova yoniga qo'yamiz (Microsoft ruxsat bergan app-local deployment) —
+; alohida redistributable o'rnatish va qayta yuklash shart emas.
+; build.ps1 ularni Visual Studio redist papkasidan nusxalaydi.
+Source: "{#SourceDir}\msvcp140*.dll";      DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\vcruntime140*.dll";  DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\concrt140.dll";      DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "{#SourceDir}\vccorlib140.dll";    DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 
 Source: "..\..\LICENSE";                   DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 
@@ -142,6 +159,7 @@ begin
     @OnDownloadProgress);
 end;
 
+// Oynali (odatiy) o'rnatish: progress ko'rsatib yuklaymiz.
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
@@ -169,6 +187,31 @@ begin
     end;
   finally
     DownloadPage.Hide;
+  end;
+end;
+
+// Jimgina o'rnatish (/SILENT, /VERYSILENT).
+//
+// MUHIM: NextButtonClick sehrgar hodisasi — jim rejimda sehrgar ishlamaydi
+// va u UMUMAN chaqirilmaydi. Shu sababli model yuklanmay qolib, ilova
+// "Model fayli topilmadi" deb ishlamas edi. PrepareToInstall esa ikkala
+// rejimda ham chaqiriladi.
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := '';
+
+  if not WizardSilent() then
+    Exit;                       // oynali rejimda yuqoridagi kod ishlagan
+
+  ModelDownloaded := False;
+  if ModelAlreadyInstalled() then
+    Exit;
+
+  try
+    DownloadTemporaryFile('{#ModelUrl}', 'ggml-rubaistt.bin', '{#ModelSha256}', nil);
+    ModelDownloaded := True;
+  except
+    Result := FmtMessage(ExpandConstant('{cm:ModelFailed}'), [GetExceptionMessage]);
   end;
 end;
 
