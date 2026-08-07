@@ -133,27 +133,82 @@ $vsRoots = @(
     "${env:ProgramFiles}\Microsoft Visual Studio\2022\BuildTools"
 ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
 
-$crtDir = $null
-foreach ($root in $vsRoots) {
-    $found = Get-ChildItem (Join-Path $root 'VC\Redist\MSVC') -Directory -EA SilentlyContinue |
-             Sort-Object Name -Descending |
-             ForEach-Object { Get-ChildItem (Join-Path $_.FullName 'x64') -Directory -Filter 'Microsoft.VC*.CRT' -EA SilentlyContinue } |
-             Select-Object -First 1
-    if ($found) { $crtDir = $found.FullName; break }
+# CRT — ilova va whisper.cpp uchun.
+# OpenMP — ggml-base.dll va barcha ggml-cpu-*.dll VCOMP140.DLL ni talab qiladi.
+#          (Bu unutilgan edi va foydalanuvchi noutbukida ilova
+#           "VCOMP140.DLL topilmadi" deb ochilmagan.)
+$redistPatterns = @('Microsoft.VC*.CRT', 'Microsoft.VC*.OpenMP')
+
+$copied = 0
+$copiedBytes = 0
+foreach ($pattern in $redistPatterns) {
+    $dir = $null
+    foreach ($root in $vsRoots) {
+        $found = Get-ChildItem (Join-Path $root 'VC\Redist\MSVC') -Directory -EA SilentlyContinue |
+                 Sort-Object Name -Descending |
+                 ForEach-Object { Get-ChildItem (Join-Path $_.FullName 'x64') -Directory -Filter $pattern -EA SilentlyContinue } |
+                 Select-Object -First 1
+        if ($found) { $dir = $found.FullName; break }
+    }
+    if (-not $dir) {
+        Fail "Redistributable topilmadi: $pattern`n" +
+             "Build Tools o'rnatishda 'MSVC ... redistributable MSMs' komponenti kerak."
+    }
+    Write-Host "  $dir"
+    $files = Get-ChildItem $dir -Filter *.dll
+    Copy-Item $files.FullName -Destination $AppOut -Force
+    $copied += $files.Count
+    $copiedBytes += ($files | Measure-Object Length -Sum).Sum
 }
+Write-Host "  Nusxalandi: $copied ta fayl ($([math]::Round($copiedBytes/1MB,2)) MB)"
 
-if (-not $crtDir) {
-    Fail "Visual C++ redistributable DLL'lari topilmadi.`n" +
-         "Build Tools o'rnatishda 'MSVC ... redistributable MSMs' komponenti kerak."
-}
+# ------------------------------------------------- bog'liqliklarni tekshirish
+#
+# Har bir yuboriladigan binarning import qiladigan DLL'lari haqiqatan
+# mavjudmi. Bu tekshiruv bo'lmaganida VCOMP140.DLL unutilib, ilova
+# foydalanuvchi kompyuterida umuman ochilmadi — ishlab chiqish mashinasida
+# esa hamma narsa "ishlayotgandek" ko'rinardi.
 
-Write-Host "  Manba: $crtDir"
-$crtFiles = Get-ChildItem $crtDir -Filter *.dll
-Copy-Item $crtFiles.FullName -Destination $AppOut -Force
-Write-Host "  Nusxalandi: $($crtFiles.Count) ta fayl ($([math]::Round(($crtFiles | Measure-Object Length -Sum).Sum/1MB,2)) MB)"
+Step "Bog'liqliklarni tekshirish"
 
-foreach ($f in @('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll')) {
-    if (-not (Test-Path (Join-Path $AppOut $f))) { Fail "$f nusxalanmadi" }
+$dumpbin = Get-ChildItem (Join-Path $vsRoots[0] 'VC\Tools\MSVC') -Recurse -Filter dumpbin.exe -EA SilentlyContinue |
+           Where-Object { $_.FullName -like '*Hostx64\x64*' } | Select-Object -First 1
+
+if (-not $dumpbin) {
+    Write-Host "  OGOHLANTIRISH: dumpbin topilmadi, tekshiruv o'tkazilmadi" -ForegroundColor Yellow
+} else {
+    # Windows tarkibidagi tizim kutubxonalari — ular bilan yuborilmaydi.
+    $systemDlls = @(
+        'kernel32','user32','gdi32','advapi32','shell32','ole32','oleaut32',
+        'comctl32','comdlg32','dwmapi','shlwapi','version','winmm','ws2_32',
+        'bcrypt','crypt32','ntdll','rpcrt4','combase','psapi','imm32',
+        'setupapi','cfgmgr32','powrprof','userenv','secur32','iphlpapi',
+        'msvcrt','normaliz','dbghelp','dxgi','d3d12','vulkan-1','propsys'
+    )
+
+    $problems = @()
+    $binaries = Get-ChildItem $AppOut -File | Where-Object { $_.Extension -in '.exe', '.dll' }
+
+    foreach ($bin in $binaries) {
+        $deps = & $dumpbin.FullName /DEPENDENTS $bin.FullName 2>&1 |
+                Select-String -Pattern '^\s{4}\S+\.dll' |
+                ForEach-Object { $_.ToString().Trim() }
+
+        foreach ($dep in $deps) {
+            if ($dep -like 'api-ms-win-*') { continue }          # Windows 10+ tarkibida
+            $base = [IO.Path]::GetFileNameWithoutExtension($dep).ToLower()
+            if ($systemDlls -contains $base) { continue }
+            if (Test-Path (Join-Path $AppOut $dep)) { continue }  # biz bilan ketadi
+            $problems += "$($bin.Name)  ->  $dep"
+        }
+    }
+
+    if ($problems) {
+        Write-Host "`n  YETISHMAYOTGAN BOG'LIQLIKLAR:" -ForegroundColor Red
+        $problems | Sort-Object -Unique | ForEach-Object { Write-Host "    $_" -ForegroundColor Red }
+        Fail "Yuqoridagi DLL'lar paketga kirmagan — foydalanuvchi kompyuterida ilova ochilmaydi."
+    }
+    Write-Host "  $($binaries.Count) ta binar tekshirildi — yetishmayotgan bog'liqlik yo'q"
 }
 
 # --------------------------------------------------------------- o'rnatuvchi

@@ -98,6 +98,10 @@ Source: "{#SourceDir}\vcruntime140*.dll";  DestDir: "{app}"; Flags: ignoreversio
 Source: "{#SourceDir}\concrt140.dll";      DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "{#SourceDir}\vccorlib140.dll";    DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 
+; OpenMP runtime — ggml-base.dll va barcha ggml-cpu-*.dll shuni talab qiladi.
+; Unutilganda ilova "VCOMP140.DLL topilmadi" deb umuman ochilmaydi.
+Source: "{#SourceDir}\vcomp140.dll";       DestDir: "{app}"; Flags: ignoreversion
+
 Source: "..\..\LICENSE";                   DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 
 [Dirs]
