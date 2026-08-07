@@ -11,19 +11,21 @@
 <link rel="icon" href="icon.png">
 <style>
   :root {
-    /* Iliq, qog'ozsimon palitra */
+    /* Iliq, qog'ozsimon palitra.
+       Ranglar WCAG AA bo'yicha tekshirilgan (oddiy matn uchun 4.5:1).
+       Qavsdagi son — fon (--bg) bilan kontrast nisbati. */
     --bg:        #F0EEE6;
     --surface:   #FAF9F5;
-    --ink:       #191917;
-    --ink-soft:  #55534C;
-    --ink-mute:  #8A877D;
-    --line:      #DDD9CC;
-    --line-soft: #E7E3D8;
-    --accent:    #C15F3C;
-    --accent-sw: #A94E2E;
+    --ink:       #191917;   /* 15.6:1 */
+    --ink-soft:  #4A4842;   /* 8.1:1  — asosiy matn osti */
+    --ink-mute:  #63605A;   /* 5.4:1  — eng och qabul qilinadigan daraja */
+    --line:      #D6D1C2;
+    --line-soft: #E3DED0;
+    --accent:    #A94E2E;   /* oq matn bilan 5.5:1 */
+    --accent-sw: #8E3F24;
     --note-bg:   #F5EDE4;
-    --note-line: #E3D2BF;
-    --ok:        #3F7D51;
+    --note-line: #DCC8B2;
+    --ok:        #2F6B41;
 
     --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
     --sans:  -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -119,7 +121,7 @@
   }
   .btn:hover { background: var(--accent-sw); }
   .btn svg { width: 19px; height: 19px; }
-  .platform .size { font-size: .84rem; color: var(--ink-mute); margin-top: 11px; text-align: center; }
+  .platform .size { font-size: .88rem; color: var(--ink-mute); margin-top: 11px; text-align: center; }
 
   /* ------------------------------------------------------------ bo'limlar */
 
@@ -170,11 +172,18 @@
 
   /* ------------------------------------------------- qo'llab-quvvatlash */
 
+  /* Qo'llab-quvvatlash bloki. Ataylab jimgina: rangli banner emas, oddiy
+     kartochka — foydalanuvchini bosim ostiga qo'ymaydi. */
   .support {
     background: var(--surface); border: 1px solid var(--line);
-    border-radius: 16px; padding: 36px 30px 30px; margin-top: 20px;
+    border-radius: 16px; padding: 30px 28px 26px;
   }
-  .paycards { display: grid; gap: 14px; margin-top: 26px; }
+  .support-h {
+    font-family: var(--serif); font-size: 1.5rem; font-weight: 500;
+    letter-spacing: -.015em; margin-bottom: 8px;
+  }
+  .support-lead { color: var(--ink-soft); font-size: .98rem; max-width: 640px; }
+  .paycards { display: grid; gap: 14px; margin-top: 24px; }
   @media (min-width: 680px) { .paycards { grid-template-columns: repeat(3, 1fr); } }
 
   .pay {
@@ -188,7 +197,7 @@
   .visa   .chip { background: linear-gradient(135deg, #2A3A8C, #1A1F71); }
   .uzcard .chip { background: linear-gradient(135deg, #23A96B, #0C7248); }
   .pay .label {
-    font-size: .72rem; font-weight: 700; letter-spacing: .11em; color: var(--ink-mute);
+    font-size: .78rem; font-weight: 700; letter-spacing: .09em; color: var(--ink-soft);
   }
   .pay .num {
     font-family: var(--mono); font-size: 1.01rem; font-weight: 600;
@@ -203,17 +212,20 @@
   .copy:hover { background: var(--note-bg); }
   .copy.done { border-color: var(--ok); color: var(--ok); background: rgba(63,125,81,.07); }
 
-  .holder { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--line-soft); }
-  .holder .k { font-size: .82rem; color: var(--ink-mute); }
-  .holder .v { font-size: 1.06rem; font-weight: 650; margin-top: 1px; }
-  .thanks { margin-top: 16px; color: var(--ink-soft); font-size: .94rem; }
+  .holder {
+    margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  }
+  .holder .k { font-size: .9rem; color: var(--ink-mute); }
+  .holder .v { font-size: 1.02rem; font-weight: 650; }
+  .thanks { margin-top: 14px; color: var(--ink-soft); font-size: .95rem; }
 
   /* ---------------------------------------------------------------- oyoq */
 
   footer {
     margin-top: 80px; padding: 34px 0 60px;
     border-top: 1px solid var(--line);
-    color: var(--ink-mute); font-size: .89rem;
+    color: var(--ink-mute); font-size: .92rem;
   }
   footer a { color: var(--accent); text-decoration: none; }
   footer a:hover { text-decoration: underline; }
@@ -275,6 +287,54 @@
     </div>
 
   </div>
+
+  <!-- --------------------------------------------------- qo'llab-quvvatlash -->
+  <!--
+    Yuklab olish tugmalaridan keyin turadi — foydalanuvchi ilovani olgan
+    payt. Ataylab jimgina: katta rangli banner emas, bosim yo'q, faqat
+    imkoniyat. Ilova bepul va shunday qoladi.
+  -->
+
+  <section id="qollab">
+    <div class="support">
+      <h2 class="support-h">Ilova bepul</h2>
+      <p class="support-lead">
+        Bu ilova bepul va shunday qoladi — reklama yo'q, obuna yo'q, ma'lumotingiz
+        sotilmaydi. Agar foydali bo'lsa va imkoningiz bo'lsa, qo'llab-quvvatlashingiz
+        mumkin. Majburiy emas, ilovaning hamma imkoniyatlari baribir ochiq.
+      </p>
+
+      <div class="paycards">
+        <div class="pay humo">
+          <div class="brand"><span class="chip"></span><span class="label">HUMO</span></div>
+          <div class="num">9860 1606 0855 5431</div>
+          <button class="copy" data-card="9860160608555431">Nusxalash</button>
+        </div>
+
+        <div class="pay visa">
+          <div class="brand"><span class="chip"></span><span class="label">VISA</span></div>
+          <div class="num">4231 2000 9261 0830</div>
+          <button class="copy" data-card="4231200092610830">Nusxalash</button>
+        </div>
+
+        <div class="pay uzcard">
+          <div class="brand"><span class="chip"></span><span class="label">UZCARD</span></div>
+          <div class="num">5614 6818 5541 0035</div>
+          <button class="copy" data-card="5614681855410035">Nusxalash</button>
+        </div>
+      </div>
+
+      <div class="holder">
+        <span class="k">Karta egasi</span>
+        <span class="v">Muhammad Mirkabilov</span>
+      </div>
+
+      <p class="thanks">
+        Qo'llab-quvvatlaganingiz uchun rahmat — bu keyingi yangilanishlarga
+        va yangi loyihalarga yordam beradi.
+      </p>
+    </div>
+  </section>
 
   <!-- ------------------------------------------------------ qanday ishlaydi -->
 
@@ -388,47 +448,6 @@
       tanilgan. Bu yangiliklar uslubidagi murakkab matnlar — kundalik oddiy gaplarda
       aniqlik yuqoriroq.
     </p>
-  </section>
-
-  <!-- --------------------------------------------------- qo'llab-quvvatlash -->
-
-  <section id="qollab">
-    <h2>Qo'llab-quvvatlash</h2>
-    <p class="sub">Ilova bepul. Yoqqan bo'lsa — davom ettirishga yordam berishingiz mumkin.</p>
-
-    <div class="support">
-      <p style="color:var(--ink-soft)">
-        Har qanday hissa — katta yoki kichik — loyihalarni davom ettirishga yordam beradi.
-        Quyidagi kartalardan qulayini tanlang.
-      </p>
-
-      <div class="paycards">
-        <div class="pay humo">
-          <div class="brand"><span class="chip"></span><span class="label">HUMO</span></div>
-          <div class="num">9860 1606 0855 5431</div>
-          <button class="copy" data-card="9860160608555431">Nusxalash</button>
-        </div>
-
-        <div class="pay visa">
-          <div class="brand"><span class="chip"></span><span class="label">VISA</span></div>
-          <div class="num">4231 2000 9261 0830</div>
-          <button class="copy" data-card="4231200092610830">Nusxalash</button>
-        </div>
-
-        <div class="pay uzcard">
-          <div class="brand"><span class="chip"></span><span class="label">UZCARD</span></div>
-          <div class="num">5614 6818 5541 0035</div>
-          <button class="copy" data-card="5614681855410035">Nusxalash</button>
-        </div>
-      </div>
-
-      <div class="holder">
-        <div class="k">Karta egasi</div>
-        <div class="v">Muhammad Mirkabilov</div>
-      </div>
-
-      <p class="thanks">Har bir qo'llab-quvvatlash uchun chin dildan minnatdorman.</p>
-    </div>
   </section>
 
   <footer>
