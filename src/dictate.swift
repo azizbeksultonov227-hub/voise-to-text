@@ -4,21 +4,35 @@ import AppKit
 import Carbon.HIToolbox
 import ApplicationServices
 import ServiceManagement
+import UserNotifications
 
 // MARK: - Whisper (rubaiSTT) yadrosi
 
 enum RubaiLog {
-    private static let df = ISO8601DateFormatter()
+    private static let df: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return f
+    }()
+    static let dir = NSHomeDirectory() + "/Library/Logs/rubaistt"
+    static let path = dir + "/app.log"
+    private static let q = DispatchQueue(label: "rubai.log")
+    private static let maxBytes: UInt64 = 5 * 1024 * 1024
+
     static func write(_ msg: String) {
         NSLog("[rubai] \(msg)")
-        let line = "\(df.string(from: Date())) \(msg)\n"
-        let path = NSHomeDirectory() + "/rubai-stt/dictation.log"
-        try? FileManager.default.createDirectory(atPath: NSHomeDirectory() + "/rubai-stt",
-                                                 withIntermediateDirectories: true)
-        if let h = FileHandle(forWritingAtPath: path) {
-            h.seekToEndOfFile(); h.write(line.data(using: .utf8)!); try? h.close()
-        } else {
-            FileManager.default.createFile(atPath: path, contents: line.data(using: .utf8))
+        let line = "\(df.string(from: Date())) [\(ProcessInfo.processInfo.processIdentifier)] \(msg)\n"
+        q.async {
+            let fm = FileManager.default
+            try? fm.createDirectory(atPath: dir, withIntermediateDirectories: true)
+            if let attrs = try? fm.attributesOfItem(atPath: path),
+               let size = attrs[.size] as? UInt64, size > maxBytes {
+                try? fm.removeItem(atPath: path + ".1")
+                try? fm.moveItem(atPath: path, toPath: path + ".1")
+            }
+            if let h = FileHandle(forWritingAtPath: path) {
+                h.seekToEndOfFile(); h.write(line.data(using: .utf8)!); try? h.close()
+            } else {
+                fm.createFile(atPath: path, contents: line.data(using: .utf8))
+            }
         }
     }
 }
@@ -48,11 +62,11 @@ final class Whisper {
         q.async {
             if !self.loaded {
                 guard let mp = self.modelPath() else {
-                    NSLog("[rubai] XATO: model fayli topilmadi (bundle/uy)")
+                    RubaiLog.write("XATO: model fayli topilmadi (bundle/uy)")
                     DispatchQueue.main.async { fail("Model fayli topilmadi") }; return
                 }
                 let rc = rubai_load(mp)
-                NSLog("[rubai] rubai_load(\(mp)) = \(rc)")
+                RubaiLog.write("rubai_load(\(mp)) = \(rc)")
                 guard rc == 0 else {
                     DispatchQueue.main.async { fail("Model yuklanmadi (kod \(rc))") }; return
                 }
@@ -84,6 +98,12 @@ final class Recorder {
     private var samples: [Float] = []
     private let lock = NSLock()
     private(set) var isRecording = false
+    // To'xtatilgan engine'lar bir necha soniya tirik turadi: CoreAudio IO thread hali
+    // tap'ni chaqirayotgan paytda engine bo'shatilsa SIGSEGV bo'ladi (DiagnosticReports'da ko'rilgan).
+    private var retired: [AVAudioEngine] = []
+    private var configObserver: NSObjectProtocol?
+    /// Yozish paytida audio qurilma o'zgarsa (engine o'zi to'xtaydi) chaqiriladi.
+    var onInterrupted: (() -> Void)?
 
     func start(_ cb: @escaping (Bool) -> Void) {
         switch AVCaptureDevice.authorizationStatus(for: .audio) {
@@ -100,7 +120,16 @@ final class Recorder {
         lock.lock(); samples.removeAll(keepingCapacity: true); lock.unlock()
         // Har yozishda YANGI engine — login'da/qurilma o'zgarganda qotib qolgan
         // (jim, "musiqa") holatdan saqlaydi.
+        retire(engine)
         engine = AVAudioEngine()
+        let eng = engine
+        if let o = configObserver { NotificationCenter.default.removeObserver(o) }
+        configObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange, object: eng, queue: .main) { [weak self] _ in
+            guard let self = self, self.isRecording, self.engine === eng else { return }
+            RubaiLog.write("audio konfiguratsiyasi o'zgardi — yozish to'xtatildi")
+            self.onInterrupted?()
+        }
         let input = engine.inputNode
         let hw = input.outputFormat(forBus: 0)
         guard hw.sampleRate > 0 else { return false }
@@ -131,10 +160,17 @@ final class Recorder {
     func stop() -> [Float] {
         guard isRecording else { return [] }
         engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
+        if engine.isRunning { engine.stop() }
         isRecording = false
         lock.lock(); let s = samples; lock.unlock()
         return s
+    }
+
+    private func retire(_ e: AVAudioEngine) {
+        retired.append(e)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+            self?.retired.removeAll { $0 === e }
+        }
     }
 }
 
@@ -348,30 +384,68 @@ final class FileTranscriber {
 // MARK: - Matnni faol input'ga kiritish (clipboard + ⌘V)
 
 enum Inserter {
-    /// Matnni clipboard'ga qo'yadi va ⌘V yuboradi. Accessibility yo'q bo'lsa false.
-    @discardableResult
-    static func insert(_ text: String) -> Bool {
-        RubaiLog.write("insert: len=\(text.count) AXTrusted=\(AXIsProcessTrusted())")
-        guard !text.isEmpty else { RubaiLog.write("insert: matn bo'sh"); return false }
-        guard AXIsProcessTrusted() else { RubaiLog.write("insert: Accessibility yo'q"); return false }
+    enum Outcome { case pasted, noAccessibility, clipboardFailed, eventFailed }
+
+    /// Matnni clipboard'ga qo'yadi, yozilganiga ishonch hosil qiladi (changeCount),
+    /// keyin ⌘V yuboradi va eski clipboard'ni tiklaydi. Natija main thread'da qaytadi.
+    static func insert(_ text: String, done: @escaping (Outcome) -> Void) {
+        let ax = AXIsProcessTrusted()
+        let post = CGPreflightPostEventAccess()
+        RubaiLog.write("insert: len=\(text.count) AXTrusted=\(ax) postEventAccess=\(post)")
         let pb = NSPasteboard.general
         let old = pb.string(forType: .string)
         pb.clearContents()
-        pb.setString(text, forType: .string)
-        let src = CGEventSource(stateID: .combinedSessionState)
-        let vKey: CGKeyCode = 9 // 'v'
-        let down = CGEvent(keyboardEventSource: src, virtualKey: vKey, keyDown: true)
-        down?.flags = .maskCommand
-        let up = CGEvent(keyboardEventSource: src, virtualKey: vKey, keyDown: false)
-        up?.flags = .maskCommand
-        down?.post(tap: .cgAnnotatedSessionEventTap)
-        up?.post(tap: .cgAnnotatedSessionEventTap)
-        RubaiLog.write("⌘V yuborildi (down=\(down != nil) up=\(up != nil))")
-        if let old = old {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                pb.clearContents(); pb.setString(old, forType: .string)
+        let ok = pb.setString(text, forType: .string)
+        let ourChange = pb.changeCount
+        guard ok else { RubaiLog.write("insert XATO: clipboard'ga yozib bo'lmadi"); done(.clipboardFailed); return }
+        guard ax else { RubaiLog.write("insert: Accessibility yo'q — matn clipboard'da qoldi"); done(.noAccessibility); return }
+
+        // Clipboard haqiqatan yangilanganini kutamiz (maks ~300ms), keyin ⌘V.
+        waitForClipboard(pb, expect: text, change: ourChange, tries: 15) { ready in
+            guard ready else { RubaiLog.write("insert XATO: clipboard yangilanmadi"); done(.clipboardFailed); return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                let sent = sendCmdV()
+                if sent {
+                    RubaiLog.write("⌘V yuborildi")
+                } else {
+                    RubaiLog.write("insert XATO: CGEvent yaratib/yuborib bo'lmadi (ruxsat bekor qilingan bo'lishi mumkin)")
+                }
+                // Eski clipboard'ni tiklash — faqat hali bizning matn turgan bo'lsa
+                // (foydalanuvchi bu orada boshqa narsa nusxalagan bo'lsa, tegmaymiz).
+                if let old = old {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                        if pb.changeCount == ourChange {
+                            pb.clearContents(); pb.setString(old, forType: .string)
+                        }
+                    }
+                }
+                done(sent ? .pasted : .eventFailed)
             }
         }
+    }
+
+    private static func waitForClipboard(_ pb: NSPasteboard, expect: String, change: Int, tries: Int,
+                                         _ cb: @escaping (Bool) -> Void) {
+        if pb.changeCount >= change, pb.string(forType: .string) == expect { cb(true); return }
+        if tries <= 0 { cb(false); return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
+            waitForClipboard(pb, expect: expect, change: change, tries: tries - 1, cb)
+        }
+    }
+
+    private static func sendCmdV() -> Bool {
+        guard let src = CGEventSource(stateID: .combinedSessionState) else {
+            RubaiLog.write("insert XATO: CGEventSource yaratilmadi"); return false
+        }
+        let vKey: CGKeyCode = 9 // 'v'
+        guard let down = CGEvent(keyboardEventSource: src, virtualKey: vKey, keyDown: true),
+              let up = CGEvent(keyboardEventSource: src, virtualKey: vKey, keyDown: false) else {
+            RubaiLog.write("insert XATO: CGEvent yaratilmadi"); return false
+        }
+        down.flags = .maskCommand
+        up.flags = .maskCommand
+        down.post(tap: .cgAnnotatedSessionEventTap)
+        up.post(tap: .cgAnnotatedSessionEventTap)
         return true
     }
 }
@@ -461,7 +535,7 @@ final class HotKey {
         if !installed {
             var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
             let s1 = InstallEventHandler(GetApplicationEventTarget(), hotkeyHandler, 1, &spec, nil, nil)
-            NSLog("[rubai] hotkey handler o'rnatildi: \(s1) (0 = OK)")
+            RubaiLog.write("hotkey handler o'rnatildi: \(s1) (0 = OK)")
             installed = true
         }
         apply(HotKeyStore.load())
@@ -473,7 +547,7 @@ final class HotKey {
         let id = EventHotKeyID(signature: OSType(0x52535454), id: 1) // 'RSTT'
         let s = RegisterEventHotKey(c.keyCode, c.carbonModifiers, id,
                                     GetApplicationEventTarget(), 0, &ref)
-        NSLog("[rubai] hotkey ro'yxatdan o'tkazildi \(c.displayString): \(s) (0 = OK)")
+        RubaiLog.write("hotkey ro'yxatdan o'tkazildi \(c.displayString): \(s) (0 = OK)")
     }
 }
 
@@ -587,6 +661,12 @@ final class SettingsWindow {
 // MARK: - Login'da ishga tushirish (SMAppService)
 
 enum LoginItem {
+    /// launchd LaunchAgent (com.rubaistt.dictation) orqali ishga tushirilganmi?
+    /// Shu holatda SMAppService login item KERAK EMAS — ikkalasi birga ikki nusxa ochadi.
+    static let managedByLaunchAgent: Bool =
+        ProcessInfo.processInfo.environment["XPC_SERVICE_NAME"] == "com.rubaistt.dictation"
+        || FileManager.default.fileExists(atPath: NSHomeDirectory() + "/Library/LaunchAgents/com.rubaistt.dictation.plist")
+
     static var isEnabled: Bool {
         if #available(macOS 13.0, *) { return SMAppService.mainApp.status == .enabled }
         return false
@@ -599,7 +679,7 @@ enum LoginItem {
             else  { try SMAppService.mainApp.unregister() }
             return true
         } catch {
-            NSLog("[rubai] login item xato: \(error.localizedDescription)")
+            RubaiLog.write("login item xato: \(error.localizedDescription)")
             return false
         }
     }
@@ -738,16 +818,22 @@ final class WelcomeWindow {
 
 // MARK: - App
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     private var statusItem: NSStatusItem!
     private let rec = Recorder()
     private let overlay = Overlay()
     private let fileXcriber = FileTranscriber()
     private let hotkey = HotKey()
     private var idleTimer: Timer?
+    private var axTimer: Timer?
     private var hkConfig = HotKeyStore.load()
     private var dictateItem: NSMenuItem!
     private var loginItem: NSMenuItem!
+    private var axItem: NSMenuItem!
+    private var lastToggle: TimeInterval = 0
+    private var transcribing = false
+    private var axTrusted: Bool? = nil          // oxirgi ma'lum holat (nil = hali tekshirilmagan)
+    private var notifiedNoAX = false
     private lazy var settings: SettingsWindow = {
         let s = SettingsWindow(hkConfig)
         s.onChange = { [weak self] cfg in self?.applyHotKey(cfg) }
@@ -761,19 +847,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ n: Notification) {
         NSApp.setActivationPolicy(.accessory) // menu-bar (Dock'da yo'q)
+        logStartup()
+        guard ensureSingleInstance() else { return }
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "rubaiSTT")
         let menu = NSMenu()
+        axItem = NSMenuItem(title: "Accessibility: tekshirilmoqda…", action: #selector(openAX), keyEquivalent: "")
+        menu.addItem(axItem)
+        menu.addItem(.separator())
         dictateItem = NSMenuItem(title: "Diktovka  (\(hkConfig.displayString))", action: #selector(toggle), keyEquivalent: "")
         menu.addItem(dictateItem)
         menu.addItem(NSMenuItem(title: "Fayl transkripsiyasi…", action: #selector(openFileTranscribe), keyEquivalent: "o"))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Sozlamalar…", action: #selector(openSettings), keyEquivalent: ","))
-        loginItem = NSMenuItem(title: "Login'da ishga tushirish", action: #selector(toggleLogin), keyEquivalent: "")
-        loginItem.state = LoginItem.isEnabled ? .on : .off
+        if LoginItem.managedByLaunchAgent {
+            loginItem = NSMenuItem(title: "Login'da ishga tushirish (LaunchAgent)", action: nil, keyEquivalent: "")
+            loginItem.state = .on
+        } else {
+            loginItem = NSMenuItem(title: "Login'da ishga tushirish", action: #selector(toggleLogin), keyEquivalent: "")
+            loginItem.state = LoginItem.isEnabled ? .on : .off
+        }
         menu.addItem(loginItem)
         menu.addItem(NSMenuItem(title: "Accessibility ruxsatini ochish", action: #selector(openAX), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Logni ko'rish", action: #selector(openLog), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Yo'riqnoma…", action: #selector(openWelcome), keyEquivalent: ""))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Chiqish", action: #selector(quit), keyEquivalent: "q"))
@@ -781,19 +877,121 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         hotkey.install()
         NotificationCenter.default.addObserver(self, selector: #selector(toggle), name: .rubaiHotkey, object: nil)
+        rec.onInterrupted = { [weak self] in self?.handleInterrupted() }
+
+        // LaunchAgent boshqaruvida SMAppService login item ortiqcha (ikki nusxa sababi) — o'chiramiz
+        if LoginItem.managedByLaunchAgent, LoginItem.isEnabled {
+            RubaiLog.write("SMAppService login item o'chirilmoqda (LaunchAgent yetarli)")
+            LoginItem.set(false)
+        }
+
+        let center = UNUserNotificationCenter.current()
+        center.delegate = self
+        center.requestAuthorization(options: [.alert, .sound]) { ok, err in
+            RubaiLog.write("bildirishnoma ruxsati: \(ok) \(err.map { "xato: \($0.localizedDescription)" } ?? "")")
+        }
 
         // Birinchi ishga tushish — onboarding oynasi; aks holda jim Accessibility tekshiruvi
         let d = UserDefaults.standard
         if !d.bool(forKey: "didOnboard") {
             d.set(true, forKey: "didOnboard")
-            LoginItem.set(true)                       // standart: login'da yonsin
-            loginItem.state = LoginItem.isEnabled ? .on : .off
+            if !LoginItem.managedByLaunchAgent {
+                LoginItem.set(true)                   // standart: login'da yonsin
+                loginItem.state = LoginItem.isEnabled ? .on : .off
+            }
             welcome.show()
         } else {
             let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
             _ = AXIsProcessTrustedWithOptions(opts)
         }
+
+        refreshAXState(initial: true)
+        axTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+            self?.refreshAXState(initial: false)
+        }
     }
+
+    // MARK: Diagnostika / holat
+
+    private func logStartup() {
+        let b = Bundle.main
+        let ver = b.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        let env = ProcessInfo.processInfo.environment
+        RubaiLog.write("=== ishga tushdi v\(ver) pid=\(ProcessInfo.processInfo.processIdentifier) path=\(b.bundlePath)")
+        RubaiLog.write("launchd: XPC_SERVICE_NAME=\(env["XPC_SERVICE_NAME"] ?? "-") managedByLaunchAgent=\(LoginItem.managedByLaunchAgent) ppid=\(getppid())")
+        let mic: String
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized: mic = "authorized"
+        case .denied: mic = "denied"
+        case .restricted: mic = "restricted"
+        case .notDetermined: mic = "notDetermined"
+        @unknown default: mic = "unknown"
+        }
+        RubaiLog.write("ruxsatlar: AX=\(AXIsProcessTrusted()) postEvent=\(CGPreflightPostEventAccess()) mic=\(mic)")
+        RubaiLog.write("hotkey: \(hkConfig.displayString)")
+    }
+
+    /// Bir vaqtda faqat bitta nusxa. launchd boshqarayotgan nusxa ustun:
+    /// - bu nusxa launchd'dan bo'lsa -> boshqalarni yopadi;
+    /// - aks holda, boshqa nusxa bor bo'lsa -> o'zi chiqadi.
+    private func ensureSingleInstance() -> Bool {
+        let me = NSRunningApplication.current
+        let others = NSRunningApplication.runningApplications(withBundleIdentifier: "com.rubaistt.dictation")
+            .filter { $0.processIdentifier != me.processIdentifier }
+        guard !others.isEmpty else { return true }
+        let fromLaunchd = ProcessInfo.processInfo.environment["XPC_SERVICE_NAME"] == "com.rubaistt.dictation"
+        if fromLaunchd {
+            for o in others {
+                RubaiLog.write("boshqa nusxa topildi pid=\(o.processIdentifier) — yopilmoqda (launchd nusxasi ustun)")
+                o.terminate()
+            }
+            return true
+        }
+        RubaiLog.write("boshqa nusxa allaqachon ishlayapti (pid=\(others.map { $0.processIdentifier })) — bu nusxa chiqadi")
+        NSApp.terminate(nil)
+        return false
+    }
+
+    private func refreshAXState(initial: Bool) {
+        let trusted = AXIsProcessTrusted()
+        guard initial || trusted != axTrusted else { return }
+        let changed = axTrusted != nil && trusted != axTrusted
+        axTrusted = trusted
+        RubaiLog.write("Accessibility holati: \(trusted ? "BOR" : "YO'Q")\(changed ? " (o'zgardi)" : "")")
+        let icon = trusted ? "mic.fill" : "mic.slash"
+        statusItem.button?.image = NSImage(systemSymbolName: icon, accessibilityDescription: "rubaiSTT")
+        statusItem.button?.toolTip = trusted ? "RubaiSTT Dictation" : "RubaiSTT: Accessibility ruxsati yo'q — matn joylashtirilmaydi"
+        axItem.title = trusted ? "Accessibility: ✅ ruxsat bor" : "⚠️ Accessibility ruxsati yo'q — bosing"
+        if trusted {
+            notifiedNoAX = false
+        } else if !notifiedNoAX {
+            notifiedNoAX = true
+            notify(id: "no-ax", title: "Accessibility ruxsati yo'q — matn joylashtirilmaydi",
+                   body: "Diktovka natijasi faqat clipboard'ga tushadi. Bosing: System Settings → Privacy & Security → Accessibility da RubaiSTT Dictation'ni yoqing.")
+        }
+    }
+
+    private func notify(id: String, title: String, body: String) {
+        let c = UNMutableNotificationContent()
+        c.title = title; c.body = body; c.sound = .default
+        c.userInfo = ["action": "openAX"]
+        let req = UNNotificationRequest(identifier: id, content: c, trigger: nil)
+        UNUserNotificationCenter.current().add(req) { err in
+            if let e = err { RubaiLog.write("bildirishnoma xato: \(e.localizedDescription)") }
+        }
+    }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent n: UNNotification,
+                                withCompletionHandler h: @escaping (UNNotificationPresentationOptions) -> Void) {
+        h([.banner, .sound])
+    }
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive r: UNNotificationResponse,
+                                withCompletionHandler h: @escaping () -> Void) {
+        if r.notification.request.content.userInfo["action"] as? String == "openAX" { openAX() }
+        h()
+    }
+
+    // MARK: Menyu
 
     @objc private func toggleLogin() {
         LoginItem.set(!LoginItem.isEnabled)
@@ -805,6 +1003,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         welcome.show()
     }
 
+    @objc private func openLog() { NSWorkspace.shared.open(URL(fileURLWithPath: RubaiLog.path)) }
+
     // Yangi hotkey'ni qo'llab, saqlab, menyuni yangilaydi
     private func applyHotKey(_ cfg: HotKeyConfig) {
         hkConfig = cfg
@@ -812,6 +1012,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkey.apply(cfg)
         dictateItem.title = "Diktovka  (\(cfg.displayString))"
         settings.update(cfg)
+        RubaiLog.write("hotkey o'zgartirildi: \(cfg.displayString)")
     }
 
     @objc private func openSettings() { settings.show() }
@@ -827,7 +1028,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
     }
 
+    // MARK: Diktovka oqimi
+
     private func finishTranscription(_ text: String, samples: [Float]) {
+        transcribing = false
         let secs = Double(samples.count) / 16000.0
         RubaiLog.write("natija: '\(text)' len=\(text.count) audio=\(String(format: "%.1f", secs))s")
 
@@ -841,31 +1045,58 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
-
-        if Inserter.insert(text) {
-            overlay.hide()
-        } else {
-            let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-            _ = AXIsProcessTrustedWithOptions(opts)
-            overlay.show("Matn clipboard'da — ⌘V bosing (Accessibility kerak)", recording: false)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) { self.overlay.hide() }
+        Inserter.insert(text) { [weak self] outcome in
+            guard let self = self else { return }
+            switch outcome {
+            case .pasted:
+                self.overlay.hide()
+            case .noAccessibility:
+                self.refreshAXState(initial: true)   // ikonka + bildirishnoma
+                self.overlay.show("⚠️ Accessibility yo'q — matn clipboard'da, ⌘V bosing", recording: false)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { self.overlay.hide() }
+            case .clipboardFailed:
+                self.overlay.show("⚠️ Clipboard'ga yozib bo'lmadi", recording: false)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) { self.overlay.hide() }
+            case .eventFailed:
+                self.overlay.show("⚠️ ⌘V yuborilmadi — matn clipboard'da, ⌘V bosing", recording: false)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { self.overlay.hide() }
+            }
         }
         scheduleIdleUnload()
     }
 
+    private func handleInterrupted() {
+        guard rec.isRecording else { return }
+        _ = rec.stop()
+        overlay.show("⚠️ Audio qurilma o'zgardi — yozish to'xtadi", recording: false)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { self.overlay.hide() }
+    }
+
     @objc private func toggle() {
+        // Debounce: Carbon hotkey tugma bosib turilganda takror keladi; ikki marta yozilishning oldini oladi
+        let now = ProcessInfo.processInfo.systemUptime
+        if now - lastToggle < 0.4 {
+            RubaiLog.write("toggle e'tiborsiz (debounce, \(Int((now - lastToggle) * 1000))ms)")
+            return
+        }
+        lastToggle = now
+        if transcribing {
+            RubaiLog.write("toggle e'tiborsiz (transkripsiya davom etmoqda)")
+            overlay.show("Matnga o'girilmoqda… kuting", recording: false)
+            return
+        }
         RubaiLog.write("toggle fired, isRecording=\(rec.isRecording)")
         if rec.isRecording {
             let samples = rec.stop()
             let secs = Double(samples.count) / 16000.0
             RubaiLog.write("stopped, samples=\(samples.count) (\(String(format: "%.1f", secs))s)")
             overlay.show("Matnga o'girilmoqda…", recording: false)
+            transcribing = true
             let prepared = prepareSamples(samples)
             Whisper.shared.transcribe(prepared) { [weak self] text in
                 self?.finishTranscription(text, samples: samples)
             } fail: { [weak self] msg in
+                self?.transcribing = false
                 RubaiLog.write("transcription XATO: \(msg)")
                 self?.overlay.show("⚠️ \(msg)", recording: false)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) { self?.overlay.hide() }
@@ -887,8 +1118,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    @objc private func quit() { rubai_unload(); NSApp.terminate(nil) }
-    func applicationWillTerminate(_ n: Notification) { rubai_unload() }
+    @objc private func quit() { RubaiLog.write("chiqish (menyu)"); rubai_unload(); NSApp.terminate(nil) }
+    func applicationWillTerminate(_ n: Notification) { RubaiLog.write("tugatilmoqda"); rubai_unload() }
 }
 
 let app = NSApplication.shared
