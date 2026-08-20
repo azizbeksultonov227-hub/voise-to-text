@@ -97,9 +97,30 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
-echo "[4/4] Ad-hoc imzolash..."
+echo "[4/4] Imzolash..."
 xattr -cr "$APP" 2>/dev/null || true
-codesign --force --deep --sign - --entitlements "$SRC/entitlements.plist" "$APP" 2>/dev/null \
-    || codesign --force --deep --sign - "$APP"
+# Doimiy self-signed sertifikat (scripts/make_signing_cert.sh yaratadi). Har build'da
+# BIR XIL sertifikat -> designated requirement "identifier + certificate leaf" bo'ladi,
+# cdhash emas -> TCC (Accessibility/Mikrofon) ruxsati qayta build'dan keyin ham saqlanadi.
+SIGN_CN="${RUBAI_SIGN_CN:-RubaiSTT Local Signing}"
+if security find-identity -v -p codesigning 2>/dev/null | grep -q "\"$SIGN_CN\""; then
+    codesign --force --deep --sign "$SIGN_CN" --identifier com.rubaistt.dictation \
+        --entitlements "$SRC/entitlements.plist" "$APP"
+    echo "  imzo: \"$SIGN_CN\""
+else
+    echo "  !! \"$SIGN_CN\" sertifikati topilmadi — AD-HOC imzolanmoqda." >&2
+    echo "  !! Har build'da Accessibility ruxsati yo'qoladi. Tuzatish: ./scripts/make_signing_cert.sh" >&2
+    codesign --force --deep --sign - --identifier com.rubaistt.dictation \
+        --entitlements "$SRC/entitlements.plist" "$APP" 2>/dev/null \
+        || codesign --force --deep --sign - "$APP"
+fi
+codesign --verify --deep --strict "$APP"
+echo "  designated requirement: $(codesign -d -r- "$APP" 2>&1 | grep designated | sed 's/^designated => //')"
+
+# LaunchAgent yuklangan bo'lsa — yangi binar bilan qayta ishga tushiramiz (KeepAlive uni ko'taradi)
+if launchctl print "gui/$(id -u)/com.rubaistt.dictation" >/dev/null 2>&1; then
+    echo "  LaunchAgent qayta ishga tushirilmoqda..."
+    launchctl kickstart -k "gui/$(id -u)/com.rubaistt.dictation" || true
+fi
 
 echo "Tayyor: $APP"
