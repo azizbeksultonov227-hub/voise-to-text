@@ -66,31 +66,26 @@ if [ ! -f "$MODEL" ]; then
     fi
 fi
 
-# 4) Ilovani build qilish
+# 4) Doimiy imzolash sertifikati (bir marta yaratiladi; keyingi ishga tushirishlarda o'tkazib yuboriladi).
+#    Har build bir xil sertifikat bilan imzolanadi -> Accessibility/Mikrofon ruxsatlari saqlanadi.
+bash "$ROOT/scripts/make_signing_cert.sh" || echo "!! Sertifikatsiz davom etilmoqda (ad-hoc) — ruxsatlar har build'da yo'qoladi" >&2
+
+# 5) Ilovani build qilish (~/Applications/RubaiSTT Dictation.app — yo'l o'zgarmas)
 echo "==> Ilova build qilinmoqda..."
 bash "$ROOT/src/build.sh"
 
-# 5) Avto-ishga tushish (login'da, open orqali — TCC to'g'ri bog'lanishi uchun)
-PLIST="$HOME/Library/LaunchAgents/com.rubaistt.dictation.plist"
-cat > "$PLIST" <<PL
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-  <key>Label</key><string>com.rubaistt.dictation</string>
-  <key>ProgramArguments</key>
-  <array><string>/usr/bin/open</string><string>$HOME/Applications/RubaiSTT Dictation.app</string></array>
-  <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><false/>
-</dict></plist>
-PL
-launchctl bootout "gui/$(id -u)" "$PLIST" 2>/dev/null || true
-launchctl bootstrap "gui/$(id -u)" "$PLIST"
+# 6) LaunchAgent (login'da, KeepAlive bilan; executable to'g'ridan-to'g'ri ishga tushadi).
+#    Ruxsatlarni tiklamaydi/buzmaydi — TCC yozuvlari sertifikatga bog'langan.
+bash "$ROOT/scripts/install_launchagent.sh"
 
 echo ""
 echo "✅ O'rnatildi! Menyu-bardagi 🎙️ ikonkani ko'rasiz."
 echo ""
-echo "OXIRGI QADAM — Accessibility ruxsati (⌘V yuborish uchun):"
+echo "OXIRGI QADAM — Accessibility ruxsati (⌘V yuborish uchun), faqat BIR MARTA:"
 echo "  System Settings > Privacy & Security > Accessibility"
-echo "  → 'RubaiSTT Dictation' ni qo'shing va yoqing"
+echo "  → 'RubaiSTT Dictation' ni qo'shing va yoqing (eski yozuv bo'lsa − bilan o'chirib qayta qo'shing)"
 echo ""
 echo "Ishlatish: istalgan joyda  ⌃⌥D  → gapiring → ⌃⌥D"
+echo "Tekshirish: ./doctor.sh"
+echo ""
+bash "$ROOT/doctor.sh" || true
