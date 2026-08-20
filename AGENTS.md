@@ -22,8 +22,9 @@ All comments, `NSLog` strings, and user-facing UI text are in **Uzbek**. Match t
 ## Build & iterate
 
 - `./setup.sh` — full one-time install (deps → whisper.cpp static libs → model → app → login agent)
-- `src/build.sh` — rebuild only the app. Requires `whisper.cpp/build-static/` (created by `setup.sh`). Output: `~/Applications/RubaiSTT Dictation.app`.
-- After `src/build.sh`, relaunch the app to test (it's loaded via LaunchAgent or SMAppService).
+- `src/build.sh` — rebuild only the app. Requires `whisper.cpp/build-static/` (created by `setup.sh`). Output: `~/Applications/RubaiSTT Dictation.app`. If the LaunchAgent is loaded it restarts it (`launchctl kickstart -k`), so the new build is live immediately.
+- `./doctor.sh` — read-only health check (signature, LaunchAgent, permissions, model, crashes). Run it after any change; `setup.sh` runs it at the end.
+- `scripts/make_signing_cert.sh` — creates (once) the self-signed "RubaiSTT Local Signing" cert in the login keychain; `scripts/install_launchagent.sh` — writes + (re)bootstraps the LaunchAgent.
 - `scripts/release.sh` — Developer ID sign + notarize + bundle model inside `.app` + produce DMG at `dist/RubaiSTT-Dictation.dmg`.
 
 No linter, typechecker, or test runner exists.
@@ -31,14 +32,17 @@ No linter, typechecker, or test runner exists.
 ## Key conventions & gotchas
 
 - **Model**: `~/rubai-stt/models/ggml-rubaistt.bin` (q8_0). The DMG app reads a copy at `Contents/Resources/ggml-rubaistt.bin`.
-- **Info.plist** and **ad-hoc codesign** are generated inside `src/build.sh:66-91` — edit them there, not as separate files. `setup.sh` builds are ad-hoc signed (no Apple Developer cert needed); `scripts/release.sh` re-signs with Developer ID + hardened runtime.
+- **Info.plist** and **codesign** are generated inside `src/build.sh` — edit them there, not as separate files. Local builds are signed with the self-signed **"RubaiSTT Local Signing"** cert (login keychain, made by `scripts/make_signing_cert.sh`), so the designated requirement is `identifier + certificate leaf`, **not** cdhash — macOS TCC (Accessibility/Microphone) grants survive rebuilds. Never go back to ad-hoc (`-s -`): every rebuild would silently revoke Accessibility. `scripts/release.sh` re-signs with Developer ID + hardened runtime.
 - **Entitlements** (`src/entitlements.plist`): only `audio-input` + `allow-jit`.
 - **whisper_context** is a process-global C singleton (`whisper_bridge.c:6`). `rubai_transcribe` mallocs the result string — the Swift caller **must** call `rubai_free_str` on it.
 - **Recorder** creates a **new `AVAudioEngine`** on every `start()` to avoid a stuck-state bug after login/device change.
 - **Hotkey** is persisted in `UserDefaults` under keys `hk.keyCode`, `hk.mods`, `hk.label`. Default: ⌃⌥D.
-- **Login item**: DMG distribution uses `SMAppService.mainApp` (macOS 13+). `setup.sh` installs a `LaunchAgent` at `~/Library/LaunchAgents/com.rubaistt.dictation.plist`. The LaunchAgent uses `/usr/bin/open` specifically so TCC permission bindings attach correctly.
+- **Login item**: DMG distribution uses `SMAppService.mainApp` (macOS 13+). `setup.sh` installs a `LaunchAgent` at `~/Library/LaunchAgents/com.rubaistt.dictation.plist` that runs the bundle executable **directly** with `KeepAlive=true` (not `/usr/bin/open` — that exits immediately and defeats KeepAlive). When the app detects it's LaunchAgent-managed (`XPC_SERVICE_NAME` / plist present) it unregisters SMAppService and disables the menu toggle — both at once launched two instances (double paste). A single-instance guard keeps the launchd copy and terminates others.
+- **Logs**: `~/Library/Logs/rubaistt/app.log` (RubaiLog, 5 MB rotation) + `launchd.out/err.log`. Crash reports: `~/Library/Logs/DiagnosticReports/RubaiSTTDictation-*.ips`.
+- **Recorder** keeps stopped `AVAudioEngine`s alive 3 s (`retired`) — freeing them immediately crashed in CoreAudio's HAL IO thread.
+- **Hotkey** toggles are debounced (400 ms; Carbon repeats `kEventHotKeyPressed` while held) and ignored while a transcription is running.
 - **Idle unload**: model is freed from RAM after 180s of inactivity.
-- **Permissions** required: Microphone (on first record) + Accessibility (for synthetic ⌘V). Accessibility is checked via `AXIsProcessTrusted()`.
+- **Permissions** required: Microphone (on first record) + Accessibility (for synthetic ⌘V). `AXIsProcessTrusted()` is polled every 5 s: icon switches `mic.fill` ↔ `mic.slash`, a UNUserNotification is posted once per loss (click opens the Accessibility pane).
 
 ## Architecture
 

@@ -84,7 +84,17 @@ cd uzbek-dictation
 ./setup.sh
 ```
 
-`setup.sh` avtomatik: kerakli vositalarni o'rnatadi → whisper.cpp'ni Metal bilan build qiladi → modelni yuklaydi → ilovani build qilib o'rnatadi → login'da avto-ishga tushishni sozlaydi.
+`setup.sh` avtomatik: kerakli vositalarni o'rnatadi → whisper.cpp'ni Metal bilan build qiladi → modelni yuklaydi → doimiy imzolash sertifikati yaratadi (bir marta, parol so'raydi) → ilovani build qilib `~/Applications` ga o'rnatadi → LaunchAgent (login'da avto-ishga tushish, crash'dan keyin o'zi ko'tariladi) → `doctor.sh` bilan holatni ko'rsatadi.
+
+Qayta ishga tushirish xavfsiz: mavjud build'lar, model va ruxsatlar saqlanadi.
+
+### Tekshirish — `doctor.sh`
+
+```bash
+./doctor.sh
+```
+
+Imzo, LaunchAgent, ruxsatlar (Accessibility/Mikrofon), model, crash hisobotlari — har biri ✅/❌ va tuzatish yo'li bilan. Loglar: `~/Library/Logs/rubaistt/app.log`.
 
 ### Oxirgi qadam — Accessibility ruxsati
 
@@ -121,7 +131,7 @@ Natija: `dist/RubaiSTT-Dictation.dmg`. Skript "Developer ID Application" sertifi
 
 ## ⚠️ Eslatma / Notes
 
-- Tayyor DMG **Developer ID bilan imzolangan** (hardened runtime). Notarize keyinroq qo'shiladi — shu sababli birinchi ochishda yuqoridagi bir martalik qadam kerak. Manbadan build (`setup.sh`) esa **ad-hoc imzolangan** (lokal, Gatekeeper bloklamaydi).
+- Tayyor DMG **Developer ID bilan imzolangan** (hardened runtime). Notarize keyinroq qo'shiladi — shu sababli birinchi ochishda yuqoridagi bir martalik qadam kerak. Manbadan build (`setup.sh`) esa login keychain'dagi **self-signed "RubaiSTT Local Signing"** sertifikati bilan imzolanadi — har build bir xil sertifikat, shuning uchun macOS Accessibility/Mikrofon ruxsatlari qayta build'dan keyin ham saqlanadi (ad-hoc imzoda har build ruxsatni buzardi).
 - App Store'ga **chiqmaydi** — tizim bo'ylab matn yozish (synthetic ⌘V) sandbox'da taqiqlangan; shuning uchun Developer ID orqali tarqatiladi.
 - **Universal binary** — Apple Silicon (Metal GPU) va Intel (CPU). Intel'da sezilarli sekinroq, lekin ishlaydi.
 
