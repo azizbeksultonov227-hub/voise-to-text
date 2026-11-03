@@ -13,8 +13,8 @@
 #define AppVersion     "1.0.0"
 #define AppPublisher   "Muhammad Mirkabilov"
 #define AppExe         "AudioMatnga.exe"
-#define AppUrl         "https://github.com/MuhammadMirrr/uzbek-dictation"
-#define ModelUrl       "https://github.com/MuhammadMirrr/uzbek-dictation/releases/download/v1.0/ggml-rubaistt.bin"
+#define AppUrl         "https://github.com/azizbeksultonov227-hub/voise-to-text"
+#define ModelUrl       "https://github.com/azizbeksultonov227-hub/voise-to-text/releases/download/v1.0/ggml-rubaistt.bin"
 #define ModelSha256    "1b02df434902015e1464611a7748927e42fcb55c49791c85239cf713c8edc1a3"
 #define ModelSize      823369796
 

@@ -2,12 +2,16 @@
 
 Istalgan ilovada (Telegram, brauzer, hujjat — qayerda kursor bo'lsa) tugmani bosib o'zbekcha gapiring — matn avtomatik o'sha joyga lotin alifbosida yoziladi.
 
-**Ikkala platforma uchun ham tayyor:**
+> **Bu nusxa haqida:** asl loyiha [MuhammadMirrr/uzbek-dictation](https://github.com/MuhammadMirrr/uzbek-dictation)
+> (muallif: Muhammad Mirqobilov, MIT litsenziya) GitHub'dan o'chirilgan. Bu repo o'sha kodning
+> ishlaydigan nusxasi. Tayyor DMG/EXE **bu yerda yo'q** — macOS'da pastdagi
+> [manbadan o'rnatish](#-ornatish--install) usuli bilan 5-10 daqiqada o'rnatiladi. Model fayli
+> (1.4 GB) [Releases](https://github.com/azizbeksultonov227-hub/voise-to-text/releases) bo'limida.
 
-| Platforma | Tugma | Yuklab olish | Texnik hujjat |
+| Platforma | Tugma | O'rnatish | Texnik hujjat |
 |---|---|---|---|
-| **macOS** 13+ | ⌃⌥D | [.dmg (785 MB)](https://github.com/MuhammadMirrr/uzbek-dictation/releases) | shu hujjat |
-| **Windows** 10/11 | Ctrl+Alt+D | [.exe (8 MB)](https://github.com/MuhammadMirrr/uzbek-dictation/releases) | [win/README.md](win/README.md) |
+| **macOS** 13+ | ⌃⌥D | `./setup.sh` (pastda) | shu hujjat |
+| **Windows** 10/11 | Ctrl+Alt+D | manbadan build | [win/README.md](win/README.md) |
 
 Ikkala versiya bir xil modeldan (`rubaiSTT v2 medium`) va bir xil inference parametrlaridan
 foydalanadi — natijalar bir xil bo'ladi. Tizimning o'rnatilgan diktovkasi kabi, lekin
@@ -55,32 +59,20 @@ xatolar: [WINDOWS-PORT-PLAN.md](WINDOWS-PORT-PLAN.md)
 - macOS 13+ · **Universal** — Apple Silicon (M1–M5, Metal bilan tez) yoki Intel (CPU, sekinroq)
 - [Homebrew](https://brew.sh)
 - Xcode Command Line Tools (`xcode-select --install`)
-- ~1 GB disk (model ~820 MB, q8_0)
+- ~2 GB disk (model ~1.4 GB)
 
 ## 🚀 O'rnatish / Install
 
-### A) Tayyor ilova (oson) — DMG
+### A) Tayyor DMG — hozircha yo'q
 
-1. **[⬇️ RubaiSTT-Dictation.dmg yuklab olish](https://github.com/MuhammadMirrr/uzbek-dictation/releases/download/v1.0/RubaiSTT-Dictation.dmg)** (~785 MB, model ichida)
-2. DMG'ni oching va ilovani **Applications** papkasiga torting
-3. Ilovani ishga tushiring — **Xush kelibsiz** oynasi ikkita ruxsatni (mikrofon + Accessibility) berishda yo'l-yo'riq ko'rsatadi
+Asl muallifning Developer ID bilan imzolangan DMG'si eski repo bilan birga o'chib ketgan. Bu
+nusxada DMG yo'q; pastdagi **B** usuli bilan o'rnating (terminal kerak, lekin hammasi avtomatik).
 
-Model ilova ichida — **to'liq oflayn**, terminal kerak emas.
-
-#### Birinchi ochish (muhim)
-
-Ilova **Developer ID bilan imzolangan**, lekin hozircha notarize qilinmagan. Shuning uchun **birinchi marta** macOS ogohlantirishi mumkin (*"Apple cannot check it for malicious software"*). Bir martalik yechim:
-
-- **macOS 13–14:** ilovaga **o'ng tugma (Control-click) → Open → Open**
-- **macOS 15 (Sequoia):** ilovani oching → bloklanadi → **System Settings → Privacy & Security** → pastga tushing → **«Open Anyway» / «Все равно открыть»** → tasdiqlang
-
-Bir marta shunday qilsangiz, keyin doim normal ochiladi.
-
-### B) Manbadan build (developer)
+### B) Manbadan o'rnatish (asosiy usul)
 
 ```bash
-git clone https://github.com/MuhammadMirrr/uzbek-dictation.git
-cd uzbek-dictation
+git clone https://github.com/azizbeksultonov227-hub/voise-to-text.git
+cd voise-to-text
 ./setup.sh
 ```
 
